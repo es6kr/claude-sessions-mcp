@@ -129,6 +129,38 @@ server.tool(
   }
 )
 
+// Get changed files from a session
+server.tool(
+  'get_session_files',
+  'Get list of all files changed in a session (from file-history-snapshot and tool_use)',
+  {
+    project_name: z.string().describe('Project folder name'),
+    session_id: z.string().describe('Session ID'),
+  },
+  async ({ project_name, session_id }) => {
+    const result = await Effect.runPromise(session.getSessionFiles(project_name, session_id))
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    }
+  }
+)
+
+// Get session diff summary
+server.tool(
+  'get_session_diff',
+  'Get diff summary for a session including file changes and snapshot info',
+  {
+    project_name: z.string().describe('Project folder name'),
+    session_id: z.string().describe('Session ID'),
+  },
+  async ({ project_name, session_id }) => {
+    const result = await Effect.runPromise(session.getSessionDiffSummary(project_name, session_id))
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    }
+  }
+)
+
 // Start GUI
 let webServerInstance: Awaited<ReturnType<typeof startWebServer>> | null = null
 

@@ -235,3 +235,161 @@ export const clearSessions = (options: {
 
     return { success: true, deletedCount }
   })
+
+// File change info extracted from session
+export interface FileChange {
+  path: string
+  action: 'created' | 'modified' | 'deleted'
+  timestamp?: string
+  messageUuid?: string
+}
+
+// Session file changes summary
+export interface SessionFilesSummary {
+  sessionId: string
+  projectName: string
+  files: FileChange[]
+  totalChanges: number
+}
+
+// Get changed files from a session
+export const getSessionFiles = (projectName: string, sessionId: string) =>
+  Effect.gen(function* () {
+    const messages = yield* readSession(projectName, sessionId)
+    const fileChanges: FileChange[] = []
+    const seenFiles = new Set<string>()
+
+    for (const msg of messages) {
+      // Check for file-history-snapshot type
+      if (msg.type === 'file-history-snapshot') {
+        const snapshot = msg as unknown as {
+          type: string
+          messageId?: string
+          snapshot?: {
+            trackedFileBackups?: Record<string, unknown>
+            timestamp?: string
+          }
+        }
+
+        const backups = snapshot.snapshot?.trackedFileBackups
+        if (backups && typeof backups === 'object') {
+          for (const filePath of Object.keys(backups)) {
+            if (!seenFiles.has(filePath)) {
+              seenFiles.add(filePath)
+              fileChanges.push({
+                path: filePath,
+                action: 'modified',
+                timestamp: snapshot.snapshot?.timestamp,
+                messageUuid: snapshot.messageId ?? msg.uuid,
+              })
+            }
+          }
+        }
+      }
+
+      // Also check tool_use for Write/Edit operations
+      if (msg.type === 'assistant' && msg.message) {
+        const assistantMsg = msg.message as {
+          content?: Array<{ type: string; name?: string; input?: { file_path?: string } }>
+        }
+        const content = assistantMsg.content
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block.type === 'tool_use' && (block.name === 'Write' || block.name === 'Edit')) {
+              const filePath = block.input?.file_path
+              if (filePath && !seenFiles.has(filePath)) {
+                seenFiles.add(filePath)
+                fileChanges.push({
+                  path: filePath,
+                  action: block.name === 'Write' ? 'created' : 'modified',
+                  timestamp: msg.timestamp,
+                  messageUuid: msg.uuid,
+                })
+              }
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      sessionId,
+      projectName,
+      files: fileChanges,
+      totalChanges: fileChanges.length,
+    } satisfies SessionFilesSummary
+  })
+
+// Get file changes diff summary for a session
+export interface FileDiffSummary {
+  sessionId: string
+  projectName: string
+  title: string
+  changes: Array<{
+    path: string
+    action: 'created' | 'modified' | 'deleted'
+    hasBackup: boolean
+    backupPreview?: string
+  }>
+  totalFiles: number
+  snapshotCount: number
+}
+
+export const getSessionDiffSummary = (projectName: string, sessionId: string) =>
+  Effect.gen(function* () {
+    const messages = yield* readSession(projectName, sessionId)
+
+    // Extract title
+    const title = pipe(
+      messages,
+      A.findFirst((m) => m.type === 'human'),
+      O.map((m) => {
+        const msg = m.message as { content?: string } | undefined
+        const content = msg?.content ?? ''
+        return content.slice(0, 50) + (content.length > 50 ? '...' : '')
+      }),
+      O.getOrElse(() => 'Untitled')
+    )
+
+    const changes: FileDiffSummary['changes'] = []
+    const seenFiles = new Set<string>()
+    let snapshotCount = 0
+
+    for (const msg of messages) {
+      if (msg.type === 'file-history-snapshot') {
+        snapshotCount++
+        const snapshot = msg as {
+          type: string
+          snapshot?: {
+            trackedFileBackups?: Record<string, { content?: string }>
+          }
+        }
+
+        const backups = snapshot.snapshot?.trackedFileBackups
+        if (backups && typeof backups === 'object') {
+          for (const [filePath, backup] of Object.entries(backups)) {
+            if (!seenFiles.has(filePath)) {
+              seenFiles.add(filePath)
+              const backupData = backup as { content?: string } | undefined
+              const content = backupData?.content ?? ''
+              changes.push({
+                path: filePath,
+                action: 'modified',
+                hasBackup: content.length > 0,
+                backupPreview: content.slice(0, 100) + (content.length > 100 ? '...' : ''),
+              })
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      sessionId,
+      projectName,
+      title,
+      changes,
+      totalFiles: changes.length,
+      snapshotCount,
+    } satisfies FileDiffSummary
+  })
