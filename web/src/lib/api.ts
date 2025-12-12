@@ -20,6 +20,8 @@ export interface Message {
   uuid: string
   parentUuid?: string | null
   type: string
+  subtype?: string
+  content?: string
   message?: unknown
   timestamp?: string
 }

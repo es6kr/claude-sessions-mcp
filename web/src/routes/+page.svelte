@@ -392,6 +392,21 @@
                 </ul>
               </div>
             {/if}
+          {:else if msg.type === 'system' && msg.subtype === 'local_command'}
+            <!-- local_command: show slash command execution -->
+            {@const commandName =
+              msg.content?.match(/<command-name>([^<]+)<\/command-name>/)?.[1] ?? ''}
+            {@const commandMessage =
+              msg.content?.match(/<command-message>([^<]+)<\/command-message>/)?.[1] ?? ''}
+            <div class="p-3 rounded-lg bg-cyan-500/10 border-l-3 border-l-cyan-500">
+              <div class="flex justify-between items-center text-xs text-gh-text-secondary">
+                <span class="font-semibold text-cyan-400">⚡ {commandName || 'Command'}</span>
+                <span>{formatDate(msg.timestamp)}</span>
+              </div>
+              {#if commandMessage && commandMessage !== commandName?.slice(1)}
+                <p class="mt-1 text-sm text-gh-text-secondary">{commandMessage}</p>
+              {/if}
+            </div>
           {:else}
             <div
               class="p-4 rounded-lg group relative {msg.type === 'human'
