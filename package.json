@@ -1,0 +1,94 @@
+{
+  "name": "claude-sessions-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for managing Claude Code conversation sessions",
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "license": "MIT",
+  "author": "es6.kr <drumrobot43@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/es6kr/claude-sessions-mcp"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "mcp",
+    "mcp-server",
+    "session-manager"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/mcp/index.js",
+      "types": "./dist/mcp/index.d.ts"
+    }
+  },
+  "bin": {
+    "claude-sessions-mcp": "./dist/mcp/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter web dev",
+    "dev:mcp": "tsx watch src/mcp/index.ts",
+    "build": "pnpm run build:mcp && pnpm run build:web",
+    "build:mcp": "tsup",
+    "build:web": "pnpm --filter web build",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "prepare": "husky"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "effect": "^3.12.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@types/node": "^22.0.0",
+    "editorconfig-checker": "^6.1.1",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-svelte": "^3.13.1",
+    "globals": "^16.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
+    "prettier-plugin-svelte": "^3.4.0",
+    "svelte-eslint-parser": "^1.4.1",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "typescript-eslint": "^8.49.0"
+  },
+  "lint-staged": {
+    "*.{js,ts,svelte}": [
+      "prettier --write",
+      "eslint --fix",
+      "editorconfig-checker"
+    ],
+    "*.{json,md,css,html,yaml,yml}": [
+      "prettier --write",
+      "editorconfig-checker"
+    ]
+  },
+  "prettier": {
+    "printWidth": 100,
+    "semi": false,
+    "singleQuote": true,
+    "tabWidth": 2,
+    "trailingComma": "es5",
+    "plugins": [
+      "prettier-plugin-svelte"
+    ],
+    "overrides": [
+      {
+        "files": "*.svelte",
+        "options": {
+          "parser": "svelte"
+        }
+      }
+    ]
+  }
+}
