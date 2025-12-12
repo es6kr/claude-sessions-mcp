@@ -344,7 +344,7 @@
         <h2 class="text-base font-semibold">
           {truncate(selectedSession.title ?? 'Untitled', 50)} ({messages.length} messages)
         </h2>
-        <p class="text-xs text-gh-text-secondary mt-1 font-mono">{selectedSession.id}</p>
+        <p class="text-xs text-gh-text-secondary font-mono mt-1">{selectedSession.id}</p>
       {:else}
         <h2 class="text-base font-semibold">Messages</h2>
       {/if}
@@ -352,52 +352,96 @@
     {#if selectedSession}
       <div class="overflow-y-auto flex-1 p-4 flex flex-col gap-4">
         {#each messages as msg}
-          <div
-            class="p-4 rounded-lg group relative {msg.type === 'human'
-              ? 'bg-gh-accent/15 border-l-3 border-l-gh-accent'
-              : ''} {msg.type === 'assistant'
-              ? 'bg-gh-green/15 border-l-3 border-l-gh-green'
-              : ''} {msg.type === 'custom-title'
-              ? 'bg-purple-500/15 border-l-3 border-l-purple-500'
-              : ''} {msg.type !== 'human' && msg.type !== 'assistant' && msg.type !== 'custom-title'
-              ? 'bg-gh-border-subtle'
-              : ''}"
-          >
-            <div class="flex justify-between mb-2 text-xs text-gh-text-secondary">
-              <span class="uppercase font-semibold">{msg.type}</span>
-              <div class="flex items-center gap-2">
-                <span class="group-hover:hidden">{formatDate(msg.timestamp)}</span>
-                <span class="hidden group-hover:inline font-mono text-gh-text-secondary/70"
-                  >{msg.uuid}</span
-                >
-                {#if msg.type === 'custom-title'}
-                  <button
-                    class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-border text-xs"
-                    onclick={() => handleEditCustomTitle(msg)}
-                    title="Edit title"
+          {#if msg.type === 'file-history-snapshot'}
+            <!-- file-history-snapshot: show tracked file backups -->
+            {@const snapshotMsg = msg as unknown as {
+              snapshot?: {
+                messageId?: string
+                trackedFileBackups?: Record
+                timestamp?: string
+              }
+            }}
+            {@const backups = snapshotMsg.snapshot?.trackedFileBackups ?? {}}
+            {@const files = Object.entries(backups)}
+            {#if files.length > 0}
+              <div class="p-4 rounded-lg bg-amber-500/10 border-l-3 border-l-amber-500">
+                <div class="flex justify-between mb-2 text-xs text-gh-text-secondary">
+                  <span class="uppercase font-semibold text-amber-400"
+                    >📁 File Backups ({files.length})</span
                   >
-                    ✏️
+                  <span>{formatDate(snapshotMsg.snapshot?.timestamp)}</span>
+                </div>
+                <ul class="space-y-1">
+                  {#each files as [filePath, info]}
+                    {@const hasBackup = !!(info.backupFileName && selectedSession?.id)}
+                    <li class="font-mono text-xs truncate" title={filePath}>
+                      {#if hasBackup}
+                        <button
+                          class="text-gh-accent hover:underline cursor-pointer bg-transparent border-none p-0"
+                          onclick={() =>
+                            api.openFileInVscode(selectedSession!.id, info.backupFileName!)}
+                          title="Open backup in VS Code"
+                        >
+                          {filePath}
+                        </button>
+                      {:else}
+                        <span class="text-gh-text-secondary">{filePath}</span>
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              </div>
+            {/if}
+          {:else}
+            <div
+              class="p-4 rounded-lg group relative {msg.type === 'human'
+                ? 'bg-gh-accent/15 border-l-3 border-l-gh-accent'
+                : ''} {msg.type === 'assistant'
+                ? 'bg-gh-green/15 border-l-3 border-l-gh-green'
+                : ''} {msg.type === 'custom-title'
+                ? 'bg-purple-500/15 border-l-3 border-l-purple-500'
+                : ''} {msg.type !== 'human' &&
+              msg.type !== 'assistant' &&
+              msg.type !== 'custom-title'
+                ? 'bg-gh-border-subtle'
+                : ''}"
+            >
+              <div class="flex justify-between mb-2 text-xs text-gh-text-secondary">
+                <span class="uppercase font-semibold">{msg.type}</span>
+                <div class="flex items-center gap-2">
+                  <span class="group-hover:hidden">{formatDate(msg.timestamp)}</span>
+                  <span class="hidden group-hover:inline font-mono text-gh-text-secondary/70"
+                    >{msg.uuid}</span
+                  >
+                  {#if msg.type === 'custom-title'}
+                    <button
+                      class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-border text-xs"
+                      onclick={() => handleEditCustomTitle(msg)}
+                      title="Edit title"
+                    >
+                      ✏️
+                    </button>
+                  {/if}
+                  <button
+                    class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-red/20 text-xs"
+                    onclick={() => handleDeleteMessage(msg)}
+                    title="Delete message"
+                  >
+                    🗑️
                   </button>
+                </div>
+              </div>
+              <div class="whitespace-pre-wrap break-words text-sm">
+                {#if msg.type === 'custom-title'}
+                  <span class="font-semibold text-purple-400"
+                    >{(msg as Message & { customTitle?: string }).customTitle ?? ''}</span
+                  >
+                {:else}
+                  {truncate(getMessageContent(msg), 500)}
                 {/if}
-                <button
-                  class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-red/20 text-xs"
-                  onclick={() => handleDeleteMessage(msg)}
-                  title="Delete message"
-                >
-                  🗑️
-                </button>
               </div>
             </div>
-            <div class="whitespace-pre-wrap break-words text-sm">
-              {#if msg.type === 'custom-title'}
-                <span class="font-semibold text-purple-400"
-                  >{(msg as Message & { customTitle?: string }).customTitle ?? ''}</span
-                >
-              {:else}
-                {truncate(getMessageContent(msg), 500)}
-              {/if}
-            </div>
-          </div>
+          {/if}
         {/each}
       </div>
     {:else}

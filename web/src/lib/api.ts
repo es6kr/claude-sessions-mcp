@@ -108,3 +108,25 @@ export const clearSessions = (options: {
 export const getVersion = () => get<{ version: string }>('/version')
 
 export const shutdown = () => post<{ success: boolean; message: string }>('/shutdown', {})
+
+export interface FileChange {
+  path: string
+  action: 'created' | 'modified' | 'deleted'
+  timestamp?: string
+  messageUuid?: string
+}
+
+export interface SessionFilesSummary {
+  sessionId: string
+  projectName: string
+  files: FileChange[]
+  totalChanges: number
+}
+
+export const getSessionFiles = (project: string, id: string) =>
+  get<SessionFilesSummary>(
+    `/session/files?project=${encodeURIComponent(project)}&id=${encodeURIComponent(id)}`
+  )
+
+export const openFileInVscode = (sessionId: string, backupFileName: string) =>
+  post<{ success: boolean }>('/open-file', { sessionId, backupFileName })

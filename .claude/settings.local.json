@@ -1,0 +1,14 @@
+{
+  "enabledMcpjsonServers": [
+    "claude-sessions-mcp",
+    "github",
+    "gmail",
+    "hwpx",
+    "mcp-gdrive",
+    "mcp-gsheets",
+    "notion",
+    "oracle-ocidb",
+    "playwright",
+    "zerolib-email"
+  ]
+}
