@@ -1,0 +1,22 @@
+#!/bin/sh
+
+# Check if pushing a version tag
+while read local_ref local_sha remote_ref remote_sha; do
+  if echo "$local_ref" | grep -qE '^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+'; then
+    tag_version=$(echo "$local_ref" | sed 's/refs\/tags\/v//')
+    pkg_version=$(node -p "require('./package.json').version")
+    web_version=$(node -p "require('./web/package.json').version")
+
+    if [ "$tag_version" != "$pkg_version" ]; then
+      echo "Error: Tag v$tag_version doesn't match package.json version $pkg_version"
+      exit 1
+    fi
+
+    if [ "$tag_version" != "$web_version" ]; then
+      echo "Error: Tag v$tag_version doesn't match web/package.json version $web_version"
+      exit 1
+    fi
+
+    echo "✓ Version $tag_version verified in all package.json files"
+  fi
+done
