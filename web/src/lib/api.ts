@@ -106,3 +106,5 @@ export const clearSessions = (options: {
 }) => post<{ success: boolean; deletedCount: number }>('/cleanup', options)
 
 export const getVersion = () => get<{ version: string }>('/version')
+
+export const shutdown = () => post<{ success: boolean; message: string }>('/shutdown', {})

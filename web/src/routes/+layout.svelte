@@ -8,6 +8,7 @@
 
   let version = $state('')
   let cleaning = $state(false)
+  let shuttingDown = $state(false)
   let cleanupResult = $state<{
     success: boolean
     deletedCount: number
@@ -22,6 +23,17 @@
       version = 'unknown'
     }
   })
+
+  const handleShutdown = async () => {
+    if (!confirm('Shutdown the server?')) return
+
+    shuttingDown = true
+    try {
+      await api.shutdown()
+    } catch {
+      // Server is shutting down, connection will be lost
+    }
+  }
 
   const handleCleanup = async () => {
     const preview = await api.previewCleanup()
@@ -72,6 +84,13 @@
         disabled={cleaning}
       >
         {cleaning ? 'Cleaning...' : 'Clear Empty Sessions'}
+      </button>
+      <button
+        class="bg-gh-red border border-gh-red text-white px-4 py-2 rounded-md text-sm transition-colors hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+        onclick={handleShutdown}
+        disabled={shuttingDown}
+      >
+        {shuttingDown ? 'Shutting down...' : 'Shutdown'}
       </button>
     </div>
   </header>

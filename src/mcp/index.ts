@@ -168,30 +168,39 @@ server.tool(
   'start_gui',
   'Start the web GUI for session management and open it in browser',
   {
-    port: z.number().default(5050).describe('Port to run the web server on (default: 5050)'),
+    port: z.number().default(5173).describe('Port to run the web server on (default: 5173)'),
     open_browser: z
       .boolean()
       .default(true)
       .describe('Whether to open browser automatically (default: true)'),
+    restart: z
+      .boolean()
+      .default(false)
+      .describe('Restart the server if already running (default: false)'),
   },
-  async ({ port, open_browser }) => {
+  async ({ port, open_browser, restart }) => {
     try {
       if (webServerInstance) {
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  success: true,
-                  message: 'Web GUI is already running',
-                  url: `http://localhost:${port}`,
-                },
-                null,
-                2
-              ),
-            },
-          ],
+        if (restart) {
+          await stopWebServer(webServerInstance)
+          webServerInstance = null
+        } else {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    success: true,
+                    message: 'Web GUI is already running',
+                    url: `http://localhost:${port}`,
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          }
         }
       }
 
@@ -237,6 +246,14 @@ server.tool(
 // Stop GUI
 server.tool('stop_gui', 'Stop the web GUI server', {}, async () => {
   if (webServerInstance) {
+    const port = webServerInstance.port
+    // Call shutdown API first for graceful shutdown
+    try {
+      await fetch(`http://localhost:${port}/api/shutdown`, { method: 'POST' })
+    } catch {
+      // Server might already be stopping
+    }
+    // Then kill the process if still running
     await stopWebServer(webServerInstance)
     webServerInstance = null
     return {

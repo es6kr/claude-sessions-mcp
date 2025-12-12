@@ -12,7 +12,7 @@ interface WebServer {
 }
 
 export async function startWebServer(
-  port: number = 5050,
+  port: number = 5173,
   openBrowser: boolean = true
 ): Promise<WebServer> {
   // Run the built SvelteKit server directly with Node
@@ -27,7 +27,12 @@ export async function startWebServer(
 
     child.stdout?.on('data', (data: Buffer) => {
       const output = data.toString()
-      if (output.includes('localhost') || output.includes('Local:')) {
+      // SvelteKit adapter-node outputs "Listening on http://0.0.0.0:PORT"
+      if (
+        output.includes('Listening on') ||
+        output.includes('localhost') ||
+        output.includes('Local:')
+      ) {
         clearTimeout(timeout)
         resolve()
       }
