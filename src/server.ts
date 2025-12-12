@@ -3,7 +3,8 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const webDir = path.join(__dirname, '..', 'web')
+// dist/web/index.js is the built SvelteKit server (adapter-node)
+const webServerPath = path.join(__dirname, 'web', 'index.js')
 
 interface WebServer {
   process: ChildProcess
@@ -14,9 +15,8 @@ export async function startWebServer(
   port: number = 5050,
   openBrowser: boolean = true
 ): Promise<WebServer> {
-  // Run SvelteKit preview
-  const child = spawn('pnpm', ['preview', '--port', String(port)], {
-    cwd: webDir,
+  // Run the built SvelteKit server directly with Node
+  const child = spawn('node', [webServerPath], {
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, PORT: String(port) },
   })
