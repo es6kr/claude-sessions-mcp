@@ -16,32 +16,36 @@
   )
 </script>
 
-<div
-  class="relative"
-  onmouseenter={() => (isHovering = true)}
-  onmouseleave={() => (isHovering = false)}
->
-  <pre
-    class="whitespace-pre-wrap font-mono text-xs text-gh-text-secondary overflow-x-auto">{displayContent}</pre>
-  {#if needsExpand && !expanded}
-    <div
-      class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gh-canvas to-transparent pointer-events-none"
-    ></div>
-    {#if isHovering}
+{#if needsExpand}
+  <div
+    class="relative"
+    onmouseenter={() => (isHovering = true)}
+    onmouseleave={() => (isHovering = false)}
+  >
+    <pre
+      class="whitespace-pre-wrap font-mono text-xs text-gh-text-secondary overflow-x-auto">{displayContent}</pre>
+    {#if !expanded}
+      <div
+        class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gh-canvas to-transparent pointer-events-none"
+      ></div>
+      {#if isHovering}
+        <button
+          class="absolute bottom-1 left-1/2 -translate-x-1/2 px-3 py-1 text-xs bg-gh-border hover:bg-gh-border-muted rounded-full cursor-pointer border-none text-gh-text-secondary transition-all"
+          onclick={() => (expanded = true)}
+        >
+          Click to expand ({lines.length - maxLines} more lines)
+        </button>
+      {/if}
+    {:else}
       <button
-        class="absolute bottom-1 left-1/2 -translate-x-1/2 px-3 py-1 text-xs bg-gh-border hover:bg-gh-border-muted rounded-full cursor-pointer border-none text-gh-text-secondary transition-all"
-        onclick={() => (expanded = true)}
+        class="mt-2 px-3 py-1 text-xs bg-gh-border hover:bg-gh-border-muted rounded-full cursor-pointer border-none text-gh-text-secondary"
+        onclick={() => (expanded = false)}
       >
-        Click to expand ({lines.length - maxLines} more lines)
+        Collapse
       </button>
     {/if}
-  {/if}
-  {#if expanded && needsExpand}
-    <button
-      class="mt-2 px-3 py-1 text-xs bg-gh-border hover:bg-gh-border-muted rounded-full cursor-pointer border-none text-gh-text-secondary"
-      onclick={() => (expanded = false)}
-    >
-      Collapse
-    </button>
-  {/if}
-</div>
+  </div>
+{:else}
+  <pre
+    class="whitespace-pre-wrap font-mono text-xs text-gh-text-secondary overflow-x-auto">{content}</pre>
+{/if}

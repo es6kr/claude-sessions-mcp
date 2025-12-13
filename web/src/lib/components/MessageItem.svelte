@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
   import * as api from '$lib/api'
-  import { formatDate, truncate, getMessageContent, renderMarkdown } from '$lib/utils'
+  import { formatDate, truncate, getMessageContent } from '$lib/utils'
   import ExpandableContent from './ExpandableContent.svelte'
 
   interface Props {
@@ -16,11 +16,15 @@
   let { msg, sessionId, isFirst = false, onDelete, onEditTitle, onSplit }: Props = $props()
 
   // Type guards for different message types
-  const isFileSnapshot = $derived(msg.type === 'file-history-snapshot')
-  const isLocalCommand = $derived(msg.type === 'system' && msg.subtype === 'local_command')
-  const isCustomTitle = $derived(msg.type === 'custom-title')
-  const isHuman = $derived(msg.type === 'human')
   const isAssistant = $derived(msg.type === 'assistant')
+  const isCustomTitle = $derived(msg.type === 'custom-title')
+  const isFileSnapshot = $derived(msg.type === 'file-history-snapshot')
+  const isHuman = $derived(msg.type === 'human' || msg.type === 'user')
+  const isLocalCommand = $derived(msg.type === 'system' && msg.subtype === 'local_command')
+  const isQueueOperation = $derived(msg.type === 'queue-operation')
+  const isToolResult = $derived(
+    msg.type === 'user' && msg.message?.content?.[0]?.type === 'tool_result'
+  )
 
   // Parse file snapshot data
   const snapshotData = $derived.by(() => {
@@ -55,6 +59,7 @@
     name: string
     input: Record<string, unknown>
   }
+  const FILE_TOOLS = ['Read', 'Write', 'Edit'] as const
   const toolUseData = $derived.by(() => {
     if (!isAssistant) return null
     const m = msg.message as { content?: unknown[] } | undefined
@@ -67,24 +72,11 @@
     return {
       name: toolUse.name,
       input: toolUse.input,
-      // Extract file path for Read tool
-      filePath: toolUse.name === 'Read' ? (toolUse.input.file_path as string) : null,
+      // Extract file path for file tools (Read, Write, Edit)
+      filePath: FILE_TOOLS.includes(toolUse.name as (typeof FILE_TOOLS)[number])
+        ? (toolUse.input.file_path as string)
+        : null,
     }
-  })
-
-  // Parse tool_result data from user messages (contains toolUseResult field)
-  interface ToolResultContent {
-    type: 'text'
-    text: string
-  }
-  const toolResultData = $derived.by(() => {
-    const m = msg as unknown as { toolUseResult?: ToolResultContent[] }
-    if (!Array.isArray(m.toolUseResult)) return null
-    const textContent = m.toolUseResult
-      .filter((item) => item.type === 'text')
-      .map((item) => item.text)
-      .join('\n')
-    return textContent || null
   })
 
   // Get custom title
@@ -95,10 +87,19 @@
 
   // Check if message has displayable content
   const hasContent = $derived.by(() => {
-    if (isFileSnapshot || isLocalCommand || isCustomTitle || toolUseData || toolResultData)
-      return true
+    // Queue operations have no displayable content but are valid
+    if (isQueueOperation) return false
+    if (isFileSnapshot || isLocalCommand || isCustomTitle || toolUseData) return true
+
+    // Check message.content first (primary content source)
     const content = getMessageContent(msg)
-    return content.trim().length > 0
+    if (content.trim().length > 0) return true
+
+    // Only warn for actual user messages without content (type 'user' or 'human')
+    if (msg.type === 'user' || msg.type === 'human') {
+      console.warn('User message without content:', $state.snapshot(msg))
+    }
+    return false
   })
 
   // CSS classes for message type
@@ -132,7 +133,9 @@
   </button>
 {/snippet}
 
-{#if isFileSnapshot && snapshotData}
+{#if isQueueOperation}
+  <!-- Queue operations are internal system messages, don't render -->
+{:else if isFileSnapshot && snapshotData}
   <!-- File history snapshot -->
   <div class="p-4 rounded-lg bg-amber-500/10 border-l-3 border-l-amber-500 group relative">
     <div class="flex justify-between mb-2 text-xs text-gh-text-secondary">
@@ -217,20 +220,10 @@
       >
         {truncate(String(toolUseData.input.command), 100)}
       </p>
+    {:else if toolUseData.name === 'Grep'}
+      {@const { path: _path, ...grepInput } = toolUseData.input}
+      <ExpandableContent content={JSON.stringify(grepInput, null, 2)} maxLines={6} />
     {/if}
-  </div>
-{:else if toolResultData}
-  <!-- Tool result message -->
-  <div class="p-3 rounded-lg bg-emerald-500/10 border-l-3 border-l-emerald-500 group relative">
-    <div class="flex justify-between items-center text-xs text-gh-text-secondary mb-2">
-      <span class="font-semibold text-emerald-400">📤 Result</span>
-      <div class="flex items-center gap-2">
-        <span>{formatDate(msg.timestamp)}</span>
-        {@render splitButton()}
-        {@render deleteButton()}
-      </div>
-    </div>
-    <ExpandableContent content={toolResultData} maxLines={10} />
   </div>
 {:else}
   <!-- Standard message (human, assistant, custom-title, etc.) -->
@@ -238,7 +231,7 @@
     class="p-4 rounded-lg group relative {messageClass} flex flex-col {hasContent ? 'gap-2' : ''}"
   >
     <div class="flex justify-between text-xs text-gh-text-secondary">
-      <span class="uppercase font-semibold">{msg.type}</span>
+      <span class="uppercase font-semibold">{isToolResult ? 'OUT' : msg.type}</span>
       <div class="flex items-center gap-2">
         <span class="group-hover:hidden">{formatDate(msg.timestamp)}</span>
         <span class="hidden group-hover:inline font-mono text-gh-text-secondary/70">
@@ -262,7 +255,13 @@
         {#if isCustomTitle}
           <span class="font-semibold text-purple-400">{customTitle}</span>
         {:else}
-          {@html renderMarkdown(truncate(getMessageContent(msg), 500))}
+          {@const msgContent = getMessageContent(msg)}
+          {@const msgLines = msgContent.split('\n')}
+          {#if msgLines.length > 10}
+            <ExpandableContent content={msgContent} maxLines={10} />
+          {:else}
+            <p class="whitespace-pre-wrap">{msgContent}</p>
+          {/if}
         {/if}
       </div>
     {/if}

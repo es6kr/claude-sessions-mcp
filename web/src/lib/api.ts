@@ -16,15 +16,38 @@ export interface SessionMeta {
   updatedAt?: string
 }
 
+// Content item with recursive content support
+export interface ContentItem {
+  type: string
+  content?: Content
+  text?: string
+  [key: string]: unknown
+}
+
+// Content can be string, single item, or array
+export type Content = string | ContentItem | ContentItem[]
+
+// Tool result object format
+export interface ToolResultObject {
+  type?: string
+  text?: string
+  content?: Content // Grep/search result content
+  file?: { filePath?: string; content?: string }
+  stdout?: string
+  stderr?: string
+  interrupted?: boolean
+}
+
 export interface Message {
   uuid: string
   parentUuid?: string | null
   messageId?: string // For file-history-snapshot type
   type: string
   subtype?: string
-  content?: string
+  content?: Content
   message?: unknown
   timestamp?: string
+  toolUseResult?: Content | ToolResultObject
 }
 
 export interface CleanupPreview {

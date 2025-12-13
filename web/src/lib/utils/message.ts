@@ -2,30 +2,38 @@
  * Message content utilities
  */
 
-import type { Message } from '$lib/api'
+import type { Content, Message } from '$lib/api'
+
+/**
+ * Recursively extract text from Content
+ */
+const extractText = (content: Content): string => {
+  if (typeof content === 'string') return content
+
+  if (Array.isArray(content)) {
+    return content.map(extractText).join('')
+  }
+
+  // Single ContentItem
+  if (content.type === 'text') return content.text ?? ''
+
+  // tool_result - extract inner content
+  if (content.type === 'tool_result') {
+    return content.content ? extractText(content.content) : '0'
+  }
+
+  if (content.content) return extractText(content.content)
+
+  return ''
+}
 
 /**
  * Extract displayable content from message
  */
 export const getMessageContent = (msg: Message): string => {
-  const m = msg.message as { content?: unknown } | undefined
+  const m = msg.message as { content?: Content } | undefined
   if (!m?.content) return ''
-
-  // If content is string, return directly
-  if (typeof m.content === 'string') return m.content
-
-  // If content is array, extract text items
-  if (Array.isArray(m.content)) {
-    return m.content
-      .filter(
-        (item): item is { type: string; text?: string } =>
-          typeof item === 'object' && item?.type === 'text'
-      )
-      .map((item) => item.text ?? '')
-      .join('')
-  }
-
-  return JSON.stringify(m.content)
+  return extractText(m.content)
 }
 
 /**
