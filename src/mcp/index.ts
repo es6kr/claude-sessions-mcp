@@ -114,13 +114,18 @@ server.tool(
       .boolean()
       .default(true)
       .describe('Clear invalid API key sessions (default: true)'),
+    clear_orphan_agents: z
+      .boolean()
+      .default(true)
+      .describe('Clear orphan agent files whose session no longer exists (default: true)'),
   },
-  async ({ project_name, clear_empty, clear_invalid }) => {
+  async ({ project_name, clear_empty, clear_invalid, clear_orphan_agents }) => {
     const result = await Effect.runPromise(
       session.clearSessions({
         projectName: project_name,
         clearEmpty: clear_empty,
         clearInvalid: clear_invalid,
+        clearOrphanAgents: clear_orphan_agents,
       })
     )
     return {

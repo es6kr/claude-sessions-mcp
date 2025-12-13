@@ -102,21 +102,62 @@ export const readSession = (projectName: string, sessionId: string) =>
     return lines.map((line) => JSON.parse(line) as Message)
   })
 
-// Delete a session
+// Find agent files linked to a session
+export const findLinkedAgents = (projectName: string, sessionId: string) =>
+  Effect.gen(function* () {
+    const projectPath = path.join(getSessionsDir(), projectName)
+    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+    const agentFiles = files.filter((f) => f.startsWith('agent-') && f.endsWith('.jsonl'))
+
+    const linkedAgents: string[] = []
+
+    for (const agentFile of agentFiles) {
+      const filePath = path.join(projectPath, agentFile)
+      const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+      const firstLine = content.split('\n')[0]
+
+      if (firstLine) {
+        try {
+          const parsed = JSON.parse(firstLine) as { sessionId?: string }
+          if (parsed.sessionId === sessionId) {
+            linkedAgents.push(agentFile.replace('.jsonl', ''))
+          }
+        } catch {
+          // Skip invalid JSON
+        }
+      }
+    }
+
+    return linkedAgents
+  })
+
+// Delete a session and its linked agent files
 export const deleteSession = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
     const sessionsDir = getSessionsDir()
-    const filePath = path.join(sessionsDir, projectName, `${sessionId}.jsonl`)
+    const projectPath = path.join(sessionsDir, projectName)
+    const filePath = path.join(projectPath, `${sessionId}.jsonl`)
 
     // Create backup directory
-    const backupDir = path.join(sessionsDir, projectName, '.bak')
+    const backupDir = path.join(projectPath, '.bak')
     yield* Effect.tryPromise(() => fs.mkdir(backupDir, { recursive: true }))
 
-    // Move to backup
+    // Find and delete linked agent files
+    const linkedAgents = yield* findLinkedAgents(projectName, sessionId)
+    const deletedAgents: string[] = []
+
+    for (const agentId of linkedAgents) {
+      const agentPath = path.join(projectPath, `${agentId}.jsonl`)
+      const agentBackupPath = path.join(backupDir, `${agentId}.jsonl`)
+      yield* Effect.tryPromise(() => fs.rename(agentPath, agentBackupPath))
+      deletedAgents.push(agentId)
+    }
+
+    // Move session file to backup
     const backupPath = path.join(backupDir, `${sessionId}.jsonl`)
     yield* Effect.tryPromise(() => fs.rename(filePath, backupPath))
 
-    return { success: true, backupPath }
+    return { success: true, backupPath, deletedAgents }
   })
 
 // Rename session by adding title prefix
@@ -209,17 +250,84 @@ export const previewCleanup = (projectName?: string) =>
     return results
   })
 
+// Find orphan agent files (agents whose parent session no longer exists)
+export const findOrphanAgents = (projectName: string) =>
+  Effect.gen(function* () {
+    const projectPath = path.join(getSessionsDir(), projectName)
+    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+
+    const sessionIds = new Set(
+      files
+        .filter((f) => !f.startsWith('agent-') && f.endsWith('.jsonl'))
+        .map((f) => f.replace('.jsonl', ''))
+    )
+
+    const agentFiles = files.filter((f) => f.startsWith('agent-') && f.endsWith('.jsonl'))
+    const orphanAgents: Array<{ agentId: string; sessionId: string }> = []
+
+    for (const agentFile of agentFiles) {
+      const filePath = path.join(projectPath, agentFile)
+      const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+      const firstLine = content.split('\n')[0]
+
+      if (firstLine) {
+        try {
+          const parsed = JSON.parse(firstLine) as { sessionId?: string }
+          if (parsed.sessionId && !sessionIds.has(parsed.sessionId)) {
+            orphanAgents.push({
+              agentId: agentFile.replace('.jsonl', ''),
+              sessionId: parsed.sessionId,
+            })
+          }
+        } catch {
+          // Skip invalid JSON
+        }
+      }
+    }
+
+    return orphanAgents
+  })
+
+// Delete orphan agent files
+export const deleteOrphanAgents = (projectName: string) =>
+  Effect.gen(function* () {
+    const projectPath = path.join(getSessionsDir(), projectName)
+    const orphans = yield* findOrphanAgents(projectName)
+
+    // Create backup directory
+    const backupDir = path.join(projectPath, '.bak')
+    yield* Effect.tryPromise(() => fs.mkdir(backupDir, { recursive: true }))
+
+    const deletedAgents: string[] = []
+
+    for (const orphan of orphans) {
+      const agentPath = path.join(projectPath, `${orphan.agentId}.jsonl`)
+      const agentBackupPath = path.join(backupDir, `${orphan.agentId}.jsonl`)
+      yield* Effect.tryPromise(() => fs.rename(agentPath, agentBackupPath))
+      deletedAgents.push(orphan.agentId)
+    }
+
+    return { success: true, deletedAgents, count: deletedAgents.length }
+  })
+
 // Clear sessions (empty and invalid)
 export const clearSessions = (options: {
   projectName?: string
   clearEmpty?: boolean
   clearInvalid?: boolean
+  clearOrphanAgents?: boolean
 }) =>
   Effect.gen(function* () {
-    const { projectName, clearEmpty = true, clearInvalid = true } = options
+    const {
+      projectName,
+      clearEmpty = true,
+      clearInvalid = true,
+      clearOrphanAgents = true,
+    } = options
     const cleanupPreview = yield* previewCleanup(projectName)
 
     let deletedCount = 0
+    let deletedAgentCount = 0
 
     for (const result of cleanupPreview) {
       const toDelete = [
@@ -228,12 +336,19 @@ export const clearSessions = (options: {
       ]
 
       for (const session of toDelete) {
-        yield* deleteSession(result.project, session.id)
+        const deleteResult = yield* deleteSession(result.project, session.id)
         deletedCount++
+        deletedAgentCount += deleteResult.deletedAgents.length
+      }
+
+      // Clean up orphan agents after deleting sessions
+      if (clearOrphanAgents) {
+        const orphanResult = yield* deleteOrphanAgents(result.project)
+        deletedAgentCount += orphanResult.count
       }
     }
 
-    return { success: true, deletedCount }
+    return { success: true, deletedCount, deletedAgentCount }
   })
 
 // File change info extracted from session
