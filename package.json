@@ -64,7 +64,11 @@
     "typescript-eslint": "^8.49.0"
   },
   "lint-staged": {
-    "*.{js,ts,svelte}": [
+    "*.svelte": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{js,ts}": [
       "prettier --write",
       "eslint --fix",
       "editorconfig-checker"
