@@ -184,6 +184,56 @@
     }
   }
 
+  const handleSplitSession = async (msg: Message) => {
+    if (!selectedSession) return
+
+    const msgIndex = messages.findIndex((m) => m.uuid === msg.uuid)
+    const remainingCount = msgIndex
+    const movingCount = messages.length - msgIndex
+
+    if (
+      !confirm(
+        `Split session at this message?\n\nThis session will keep ${remainingCount} messages.\nNew session will have ${movingCount} messages.`
+      )
+    )
+      return
+
+    try {
+      loading = true
+      const result = await api.splitSession(
+        selectedSession.projectName,
+        selectedSession.id,
+        msg.uuid
+      )
+
+      if (result.success && result.newSessionId) {
+        // Refresh session list for current project
+        const newSessions = await api.listSessions(selectedSession.projectName)
+        projectSessions.set(selectedSession.projectName, newSessions)
+        projectSessions = new Map(projectSessions)
+
+        // Update current session view (show remaining messages)
+        messages = messages.slice(0, msgIndex)
+
+        // Update session metadata
+        const sessions = projectSessions.get(selectedSession.projectName)
+        const currentSession = sessions?.find((s) => s.id === selectedSession!.id)
+        if (currentSession) {
+          currentSession.messageCount = messages.length
+          projectSessions = new Map(projectSessions)
+        }
+
+        alert(`Session split successfully!\nNew session ID: ${result.newSessionId}`)
+      } else {
+        error = result.error ?? 'Failed to split session'
+      }
+    } catch (e) {
+      error = String(e)
+    } finally {
+      loading = false
+    }
+  }
+
   // Lifecycle
   onMount(async () => {
     await loadProjects()
@@ -212,6 +262,7 @@
     {messages}
     onDeleteMessage={handleDeleteMessage}
     onEditTitle={handleEditCustomTitle}
+    onSplitSession={handleSplitSession}
   />
 </div>
 

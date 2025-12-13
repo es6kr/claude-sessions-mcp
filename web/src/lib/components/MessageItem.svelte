@@ -6,11 +6,13 @@
   interface Props {
     msg: Message
     sessionId: string
+    isFirst?: boolean
     onDelete: (msg: Message) => void
     onEditTitle?: (msg: Message) => void
+    onSplit?: (msg: Message) => void
   }
 
-  let { msg, sessionId, onDelete, onEditTitle }: Props = $props()
+  let { msg, sessionId, isFirst = false, onDelete, onEditTitle, onSplit }: Props = $props()
 
   // Type guards for different message types
   const isFileSnapshot = $derived(msg.type === 'file-history-snapshot')
@@ -58,6 +60,18 @@
   })
 </script>
 
+{#snippet splitButton()}
+  {#if onSplit && !isFirst}
+    <button
+      class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-accent/20 text-xs"
+      onclick={() => onSplit(msg)}
+      title="Split session from this message"
+    >
+      ✂️
+    </button>
+  {/if}
+{/snippet}
+
 {#snippet deleteButton()}
   <button
     class="opacity-0 group-hover:opacity-100 transition-opacity bg-transparent border-none cursor-pointer p-1 rounded hover:bg-gh-red/20 text-xs"
@@ -77,6 +91,7 @@
       </span>
       <div class="flex items-center gap-2">
         <span>{formatDate(snapshotData.timestamp)}</span>
+        {@render splitButton()}
         {@render deleteButton()}
       </div>
     </div>
@@ -106,6 +121,7 @@
       <span class="font-semibold text-cyan-400">⚡ {commandData.name || 'Command'}</span>
       <div class="flex items-center gap-2">
         <span>{formatDate(msg.timestamp)}</span>
+        {@render splitButton()}
         {@render deleteButton()}
       </div>
     </div>
@@ -132,6 +148,7 @@
             ✏️
           </button>
         {/if}
+        {@render splitButton()}
         {@render deleteButton()}
       </div>
     </div>

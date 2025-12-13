@@ -132,3 +132,14 @@ export const getSessionFiles = (project: string, id: string) =>
 
 export const openFileInVscode = (sessionId: string, backupFileName: string) =>
   post<{ success: boolean }>('/open-file', { sessionId, backupFileName })
+
+export interface SplitSessionResult {
+  success: boolean
+  newSessionId?: string
+  newSessionPath?: string
+  movedMessageCount?: number
+  error?: string
+}
+
+export const splitSession = (project: string, sessionId: string, messageUuid: string) =>
+  post<SplitSessionResult>('/session/split', { project, sessionId, messageUuid })

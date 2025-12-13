@@ -166,6 +166,29 @@ server.tool(
   }
 )
 
+// Split session
+server.tool(
+  'split_session',
+  'Split a session at a specific message, creating a new session with messages from that point onwards',
+  {
+    project_name: z.string().describe('Project folder name'),
+    session_id: z.string().describe('Session ID to split'),
+    message_uuid: z
+      .string()
+      .describe(
+        'UUID of the message where the split starts (this message becomes the first message of the new session)'
+      ),
+  },
+  async ({ project_name, session_id, message_uuid }) => {
+    const result = await Effect.runPromise(
+      session.splitSession(project_name, session_id, message_uuid)
+    )
+    return {
+      content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+    }
+  }
+)
+
 // Start GUI
 let webServerInstance: Awaited<ReturnType<typeof startWebServer>> | null = null
 

@@ -4,6 +4,7 @@ import { Schema } from 'effect'
 export const MessageSchema = Schema.Struct({
   uuid: Schema.String,
   parentUuid: Schema.optional(Schema.NullOr(Schema.String)),
+  sessionId: Schema.optional(Schema.String),
   type: Schema.String,
   message: Schema.optional(Schema.Unknown),
   timestamp: Schema.optional(Schema.String),

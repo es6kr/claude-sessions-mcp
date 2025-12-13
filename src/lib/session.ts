@@ -435,6 +435,102 @@ export const getSessionFiles = (projectName: string, sessionId: string) =>
     } satisfies SessionFilesSummary
   })
 
+// Split session at a specific message
+export interface SplitSessionResult {
+  success: boolean
+  newSessionId?: string
+  newSessionPath?: string
+  movedMessageCount?: number
+  error?: string
+}
+
+export const splitSession = (projectName: string, sessionId: string, splitAtMessageUuid: string) =>
+  Effect.gen(function* () {
+    const projectPath = path.join(getSessionsDir(), projectName)
+    const filePath = path.join(projectPath, `${sessionId}.jsonl`)
+    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
+    const lines = content.trim().split('\n').filter(Boolean)
+
+    // Parse all messages preserving their full structure
+    const allMessages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
+
+    // Find the split point
+    const splitIndex = allMessages.findIndex((m) => m.uuid === splitAtMessageUuid)
+    if (splitIndex === -1) {
+      return { success: false, error: 'Message not found' } satisfies SplitSessionResult
+    }
+
+    if (splitIndex === 0) {
+      return { success: false, error: 'Cannot split at first message' } satisfies SplitSessionResult
+    }
+
+    // Generate new session ID
+    const newSessionId = crypto.randomUUID()
+
+    // Split messages
+    const remainingMessages = allMessages.slice(0, splitIndex)
+    const movedMessages = allMessages.slice(splitIndex)
+
+    // Update moved messages with new sessionId and fix first message's parentUuid
+    const updatedMovedMessages = movedMessages.map((msg, index) => {
+      const updated = { ...msg, sessionId: newSessionId }
+      if (index === 0) {
+        // First message of new session should have no parent
+        updated.parentUuid = null
+      }
+      return updated
+    })
+
+    // Write remaining messages to original file
+    const remainingContent = remainingMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(filePath, remainingContent, 'utf-8'))
+
+    // Write moved messages to new session file
+    const newFilePath = path.join(projectPath, `${newSessionId}.jsonl`)
+    const newContent = updatedMovedMessages.map((m) => JSON.stringify(m)).join('\n') + '\n'
+    yield* Effect.tryPromise(() => fs.writeFile(newFilePath, newContent, 'utf-8'))
+
+    // Update linked agent files that reference the old sessionId
+    const agentFiles = yield* Effect.tryPromise(() => fs.readdir(projectPath))
+    const agentJsonlFiles = agentFiles.filter((f) => f.startsWith('agent-') && f.endsWith('.jsonl'))
+
+    for (const agentFile of agentJsonlFiles) {
+      const agentPath = path.join(projectPath, agentFile)
+      const agentContent = yield* Effect.tryPromise(() => fs.readFile(agentPath, 'utf-8'))
+      const agentLines = agentContent.trim().split('\n').filter(Boolean)
+
+      if (agentLines.length === 0) continue
+
+      const firstAgentMsg = JSON.parse(agentLines[0]) as { sessionId?: string }
+
+      // If this agent belongs to the original session, check if it should be moved
+      if (firstAgentMsg.sessionId === sessionId) {
+        // Check if any message in moved messages is related to this agent
+        const agentId = agentFile.replace('agent-', '').replace('.jsonl', '')
+        const isRelatedToMoved = movedMessages.some(
+          (msg) => (msg as { agentId?: string }).agentId === agentId
+        )
+
+        if (isRelatedToMoved) {
+          // Update all messages in this agent file to reference new sessionId
+          const updatedAgentMessages = agentLines.map((line) => {
+            const msg = JSON.parse(line) as Record<string, unknown>
+            return JSON.stringify({ ...msg, sessionId: newSessionId })
+          })
+          const updatedAgentContent = updatedAgentMessages.join('\n') + '\n'
+          yield* Effect.tryPromise(() => fs.writeFile(agentPath, updatedAgentContent, 'utf-8'))
+        }
+      }
+    }
+
+    return {
+      success: true,
+      newSessionId,
+      newSessionPath: newFilePath,
+      movedMessageCount: movedMessages.length,
+    } satisfies SplitSessionResult
+  })
+
 // Get file changes diff summary for a session
 export interface FileDiffSummary {
   sessionId: string

@@ -8,9 +8,15 @@
     messages: Message[]
     onDeleteMessage: (msg: Message) => void
     onEditTitle: (msg: Message) => void
+    onSplitSession: (msg: Message) => void
   }
 
-  let { session, messages, onDeleteMessage, onEditTitle }: Props = $props()
+  let { session, messages, onDeleteMessage, onEditTitle, onSplitSession }: Props = $props()
+
+  // Find index of first meaningful message (user/assistant, not metadata)
+  const firstMeaningfulIndex = $derived(
+    messages.findIndex((m) => m.type === 'user' || m.type === 'assistant' || m.type === 'human')
+  )
 </script>
 
 <section
@@ -32,7 +38,14 @@
   {#if session}
     <div class="overflow-y-auto flex-1 p-4 flex flex-col gap-4">
       {#each messages as msg, i (msg.uuid ?? `idx-${i}`)}
-        <MessageItem {msg} sessionId={session.id} onDelete={onDeleteMessage} {onEditTitle} />
+        <MessageItem
+          {msg}
+          sessionId={session.id}
+          isFirst={i === 0 || i === firstMeaningfulIndex}
+          onDelete={onDeleteMessage}
+          {onEditTitle}
+          onSplit={onSplitSession}
+        />
       {/each}
     </div>
   {:else}
