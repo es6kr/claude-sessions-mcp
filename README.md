@@ -14,10 +14,10 @@ MCP (Model Context Protocol) server and Web UI for managing Claude Code sessions
 
 ```bash
 # Using npx (recommended)
-npx @es6kr/claude-sessions-mcp
+npx claude-sessions-mcp
 
 # Or install globally
-npm install -g @es6kr/claude-sessions-mcp
+npm install -g claude-sessions-mcp
 ```
 
 ## Usage
@@ -27,7 +27,7 @@ npm install -g @es6kr/claude-sessions-mcp
 Add to Claude Code:
 
 ```bash
-claude mcp add claude-sessions -- npx @es6kr/claude-sessions-mcp
+claude mcp add claude-sessions -- npx claude-sessions-mcp
 ```
 
 Or manually edit `~/.claude.json`:
@@ -37,7 +37,7 @@ Or manually edit `~/.claude.json`:
   "mcpServers": {
     "claude-sessions": {
       "command": "npx",
-      "args": ["@es6kr/claude-sessions-mcp"]
+      "args": ["claude-sessions-mcp"]
     }
   }
 }
