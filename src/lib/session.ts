@@ -196,9 +196,12 @@ export const deleteMessage = (projectName: string, sessionId: string, messageUui
     const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
     const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
     const lines = content.trim().split('\n').filter(Boolean)
-    const messages = lines.map((line) => JSON.parse(line) as Message)
+    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
 
-    const targetIndex = messages.findIndex((m) => m.uuid === messageUuid)
+    // Find by uuid or messageId (for file-history-snapshot type)
+    const targetIndex = messages.findIndex(
+      (m) => m.uuid === messageUuid || m.messageId === messageUuid
+    )
     if (targetIndex === -1) {
       return { success: false, error: 'Message not found' }
     }
@@ -473,7 +476,7 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
 
     // Update moved messages with new sessionId and fix first message's parentUuid
     const updatedMovedMessages = movedMessages.map((msg, index) => {
-      const updated = { ...msg, sessionId: newSessionId }
+      const updated: Record<string, unknown> = { ...msg, sessionId: newSessionId }
       if (index === 0) {
         // First message of new session should have no parent
         updated.parentUuid = null

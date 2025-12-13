@@ -147,9 +147,13 @@
   const handleDeleteMessage = async (msg: Message) => {
     if (!selectedSession || !confirm('Delete this message?')) return
 
+    // Use uuid or messageId (for file-history-snapshot type)
+    const msgId = msg.uuid || msg.messageId
+    if (!msgId) return
+
     try {
-      await api.deleteMessage(selectedSession.projectName, selectedSession.id, msg.uuid)
-      messages = messages.filter((m) => m.uuid !== msg.uuid)
+      await api.deleteMessage(selectedSession.projectName, selectedSession.id, msgId)
+      messages = messages.filter((m) => (m.uuid || m.messageId) !== msgId)
 
       // Update session message count
       const sessions = projectSessions.get(selectedSession.projectName)

@@ -19,6 +19,7 @@ export interface SessionMeta {
 export interface Message {
   uuid: string
   parentUuid?: string | null
+  messageId?: string // For file-history-snapshot type
   type: string
   subtype?: string
   content?: string

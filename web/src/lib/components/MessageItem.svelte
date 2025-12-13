@@ -51,6 +51,16 @@
   // Get custom title
   const customTitle = $derived((msg as Message & { customTitle?: string }).customTitle ?? '')
 
+  // Get message ID (uuid or messageId for file-history-snapshot)
+  const messageId = $derived(msg.uuid || (msg as unknown as { messageId?: string }).messageId || '')
+
+  // Check if message has displayable content
+  const hasContent = $derived.by(() => {
+    if (isFileSnapshot || isLocalCommand || isCustomTitle) return true
+    const content = getMessageContent(msg)
+    return content.trim().length > 0
+  })
+
   // CSS classes for message type
   const messageClass = $derived.by(() => {
     if (isHuman) return 'bg-gh-accent/15 border-l-3 border-l-gh-accent'
@@ -131,13 +141,15 @@
   </div>
 {:else}
   <!-- Standard message (human, assistant, custom-title, etc.) -->
-  <div class="p-4 rounded-lg group relative {messageClass}">
-    <div class="flex justify-between mb-2 text-xs text-gh-text-secondary">
+  <div
+    class="p-4 rounded-lg group relative {messageClass} flex flex-col {hasContent ? 'gap-2' : ''}"
+  >
+    <div class="flex justify-between text-xs text-gh-text-secondary">
       <span class="uppercase font-semibold">{msg.type}</span>
       <div class="flex items-center gap-2">
         <span class="group-hover:hidden">{formatDate(msg.timestamp)}</span>
         <span class="hidden group-hover:inline font-mono text-gh-text-secondary/70">
-          {msg.uuid}
+          {messageId}
         </span>
         {#if isCustomTitle && onEditTitle}
           <button
@@ -152,12 +164,14 @@
         {@render deleteButton()}
       </div>
     </div>
-    <div class="message-content text-sm">
-      {#if isCustomTitle}
-        <span class="font-semibold text-purple-400">{customTitle}</span>
-      {:else}
-        {@html renderMarkdown(truncate(getMessageContent(msg), 500))}
-      {/if}
-    </div>
+    {#if hasContent}
+      <div class="message-content text-sm">
+        {#if isCustomTitle}
+          <span class="font-semibold text-purple-400">{customTitle}</span>
+        {:else}
+          {@html renderMarkdown(truncate(getMessageContent(msg), 500))}
+        {/if}
+      </div>
+    {/if}
   </div>
 {/if}
