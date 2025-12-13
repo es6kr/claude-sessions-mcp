@@ -7,3 +7,4 @@ dist
 *.log
 .DS_Store
 .npmrc.local
+.claude/settings.local.json
