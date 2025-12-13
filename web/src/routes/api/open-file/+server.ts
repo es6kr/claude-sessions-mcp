@@ -8,13 +8,19 @@ import type { RequestHandler } from './$types'
 const execAsync = promisify(exec)
 
 export const POST: RequestHandler = async ({ request }) => {
-  const { sessionId, backupFileName } = await request.json()
-  if (!sessionId || !backupFileName) {
-    throw error(400, 'sessionId and backupFileName required')
-  }
+  const body = await request.json()
 
-  // Construct the file path: ~/.claude/file-history/{sessionId}/{backupFileName}
-  const filePath = join(homedir(), '.claude', 'file-history', sessionId, backupFileName)
+  let filePath: string
+
+  if (body.filePath) {
+    // Direct file path (for Read tool)
+    filePath = body.filePath
+  } else if (body.sessionId && body.backupFileName) {
+    // Backup file path: ~/.claude/file-history/{sessionId}/{backupFileName}
+    filePath = join(homedir(), '.claude', 'file-history', body.sessionId, body.backupFileName)
+  } else {
+    throw error(400, 'filePath or (sessionId and backupFileName) required')
+  }
 
   try {
     // Open the file in VS Code using the code command

@@ -134,6 +134,8 @@ export const getSessionFiles = (project: string, id: string) =>
 export const openFileInVscode = (sessionId: string, backupFileName: string) =>
   post<{ success: boolean }>('/open-file', { sessionId, backupFileName })
 
+export const openFile = (filePath: string) => post<{ success: boolean }>('/open-file', { filePath })
+
 export interface SplitSessionResult {
   success: boolean
   newSessionId?: string
@@ -144,3 +146,12 @@ export interface SplitSessionResult {
 
 export const splitSession = (project: string, sessionId: string, messageUuid: string) =>
   post<SplitSessionResult>('/session/split', { project, sessionId, messageUuid })
+
+export const checkFileExists = async (filePath: string): Promise<boolean> => {
+  try {
+    const res = await get<{ exists: boolean }>(`/file-exists?path=${encodeURIComponent(filePath)}`)
+    return res.exists
+  } catch {
+    return false
+  }
+}

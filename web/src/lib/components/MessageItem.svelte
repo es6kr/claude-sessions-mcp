@@ -2,6 +2,7 @@
   import type { Message } from '$lib/api'
   import * as api from '$lib/api'
   import { formatDate, truncate, getMessageContent, renderMarkdown } from '$lib/utils'
+  import ExpandableContent from './ExpandableContent.svelte'
 
   interface Props {
     msg: Message
@@ -48,6 +49,44 @@
     return { name, message }
   })
 
+  // Parse tool_use data from assistant messages
+  interface ToolUse {
+    type: 'tool_use'
+    name: string
+    input: Record<string, unknown>
+  }
+  const toolUseData = $derived.by(() => {
+    if (!isAssistant) return null
+    const m = msg.message as { content?: unknown[] } | undefined
+    if (!Array.isArray(m?.content)) return null
+    const toolUse = m.content.find(
+      (item): item is ToolUse =>
+        typeof item === 'object' && item !== null && (item as ToolUse).type === 'tool_use'
+    )
+    if (!toolUse) return null
+    return {
+      name: toolUse.name,
+      input: toolUse.input,
+      // Extract file path for Read tool
+      filePath: toolUse.name === 'Read' ? (toolUse.input.file_path as string) : null,
+    }
+  })
+
+  // Parse tool_result data from user messages (contains toolUseResult field)
+  interface ToolResultContent {
+    type: 'text'
+    text: string
+  }
+  const toolResultData = $derived.by(() => {
+    const m = msg as unknown as { toolUseResult?: ToolResultContent[] }
+    if (!Array.isArray(m.toolUseResult)) return null
+    const textContent = m.toolUseResult
+      .filter((item) => item.type === 'text')
+      .map((item) => item.text)
+      .join('\n')
+    return textContent || null
+  })
+
   // Get custom title
   const customTitle = $derived((msg as Message & { customTitle?: string }).customTitle ?? '')
 
@@ -56,7 +95,8 @@
 
   // Check if message has displayable content
   const hasContent = $derived.by(() => {
-    if (isFileSnapshot || isLocalCommand || isCustomTitle) return true
+    if (isFileSnapshot || isLocalCommand || isCustomTitle || toolUseData || toolResultData)
+      return true
     const content = getMessageContent(msg)
     return content.trim().length > 0
   })
@@ -138,6 +178,59 @@
     {#if commandData.message && commandData.message !== commandData.name?.slice(1)}
       <p class="mt-1 text-sm text-gh-text-secondary">{commandData.message}</p>
     {/if}
+  </div>
+{:else if toolUseData}
+  <!-- Tool use message -->
+  <div class="p-3 rounded-lg bg-violet-500/10 border-l-3 border-l-violet-500 group relative">
+    <div class="flex justify-between items-center text-xs text-gh-text-secondary">
+      <span class="font-semibold text-violet-400">🔧 {toolUseData.name}</span>
+      <div class="flex items-center gap-2">
+        <span>{formatDate(msg.timestamp)}</span>
+        {@render splitButton()}
+        {@render deleteButton()}
+      </div>
+    </div>
+    {#if toolUseData.filePath}
+      {#await api.checkFileExists(toolUseData.filePath)}
+        <span class="mt-1 text-sm text-gh-text-secondary font-mono">
+          {toolUseData.filePath.split('/').pop()}
+        </span>
+      {:then exists}
+        {#if exists}
+          <button
+            class="mt-1 text-sm text-gh-accent hover:underline cursor-pointer bg-transparent border-none p-0 font-mono truncate block max-w-full text-left"
+            onclick={() => api.openFile(toolUseData.filePath!)}
+            title={toolUseData.filePath}
+          >
+            {toolUseData.filePath.split('/').pop()}
+          </button>
+        {:else}
+          <span class="mt-1 text-sm text-gh-text-secondary font-mono" title={toolUseData.filePath}>
+            {toolUseData.filePath.split('/').pop()}
+          </span>
+        {/if}
+      {/await}
+    {:else if toolUseData.input.command}
+      <p
+        class="mt-1 text-sm text-gh-text-secondary font-mono truncate"
+        title={String(toolUseData.input.command)}
+      >
+        {truncate(String(toolUseData.input.command), 100)}
+      </p>
+    {/if}
+  </div>
+{:else if toolResultData}
+  <!-- Tool result message -->
+  <div class="p-3 rounded-lg bg-emerald-500/10 border-l-3 border-l-emerald-500 group relative">
+    <div class="flex justify-between items-center text-xs text-gh-text-secondary mb-2">
+      <span class="font-semibold text-emerald-400">📤 Result</span>
+      <div class="flex items-center gap-2">
+        <span>{formatDate(msg.timestamp)}</span>
+        {@render splitButton()}
+        {@render deleteButton()}
+      </div>
+    </div>
+    <ExpandableContent content={toolResultData} maxLines={10} />
   </div>
 {:else}
   <!-- Standard message (human, assistant, custom-title, etc.) -->
