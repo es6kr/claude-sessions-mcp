@@ -8,7 +8,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "effect": "^3.12.5"
+    "effect": "^3.12.5",
+    "marked": "^17.0.1",
+    "mdsvex": "^0.12.6"
   },
   "devDependencies": {
     "@sveltejs/adapter-node": "^5.2.0",

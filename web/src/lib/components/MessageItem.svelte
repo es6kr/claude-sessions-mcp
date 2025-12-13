@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
   import * as api from '$lib/api'
-  import { formatDate, truncate, getMessageContent } from '$lib/utils'
+  import { formatDate, truncate, getMessageContent, renderMarkdown } from '$lib/utils'
 
   interface Props {
     msg: Message
@@ -152,11 +152,11 @@
         {@render deleteButton()}
       </div>
     </div>
-    <div class="whitespace-pre-wrap break-words text-sm">
+    <div class="message-content text-sm">
       {#if isCustomTitle}
         <span class="font-semibold text-purple-400">{customTitle}</span>
       {:else}
-        {truncate(getMessageContent(msg), 500)}
+        {@html renderMarkdown(truncate(getMessageContent(msg), 500))}
       {/if}
     </div>
   </div>
