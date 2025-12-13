@@ -92,3 +92,19 @@ export const GET = async () => {
 - Effect-TS for async/error handling
 - Svelte 5 runes for reactivity
 - No emojis in code unless requested
+
+## Release
+
+버전 업데이트 및 태그 푸시:
+
+```bash
+npm version patch && git push && git push --tags
+```
+
+버전 타입:
+
+- `patch`: 0.1.4 → 0.1.5 (버그 수정)
+- `minor`: 0.1.4 → 0.2.0 (기능 추가)
+- `major`: 0.1.4 → 1.0.0 (Breaking changes)
+
+> `.npmrc`에 `sign-git-commit=true`, `sign-git-tag=true` 설정으로 자동 서명됨
