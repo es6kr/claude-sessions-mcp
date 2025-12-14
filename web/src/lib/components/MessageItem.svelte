@@ -1,8 +1,9 @@
 <script lang="ts">
   import type { Message } from '$lib/api'
   import * as api from '$lib/api'
-  import { formatDate, truncate, getMessageContent } from '$lib/utils'
+  import { formatDate, getMessageContent, parseIdeTags } from '$lib/utils'
   import ExpandableContent from './ExpandableContent.svelte'
+  import IdeTag from './IdeTag.svelte'
 
   interface Props {
     msg: Message
@@ -214,12 +215,10 @@
         {/if}
       {/await}
     {:else if toolUseData.input.command}
-      <p
-        class="mt-1 text-sm text-gh-text-secondary font-mono truncate"
-        title={String(toolUseData.input.command)}
-      >
-        {truncate(String(toolUseData.input.command), 100)}
-      </p>
+      {#if toolUseData.input.description}
+        <p class="mt-1 text-sm text-gh-text-secondary">{toolUseData.input.description}</p>
+      {/if}
+      <ExpandableContent content={String(toolUseData.input.command)} maxLines={3} />
     {:else if toolUseData.name === 'Grep'}
       {@const { path: _path, ...grepInput } = toolUseData.input}
       <ExpandableContent content={JSON.stringify(grepInput, null, 2)} maxLines={6} />
@@ -256,12 +255,19 @@
           <span class="font-semibold text-purple-400">{customTitle}</span>
         {:else}
           {@const msgContent = getMessageContent(msg)}
-          {@const msgLines = msgContent.split('\n')}
-          {#if msgLines.length > 10}
-            <ExpandableContent content={msgContent} maxLines={10} />
-          {:else}
-            <p class="whitespace-pre-wrap">{msgContent}</p>
-          {/if}
+          {@const segments = parseIdeTags(msgContent)}
+          {#each segments as segment}
+            {#if segment.type === 'ide_tag' && segment.tag}
+              <IdeTag tag={segment.tag} content={segment.content} />
+            {:else}
+              {@const textLines = segment.content.split('\n')}
+              {#if textLines.length > 10}
+                <ExpandableContent content={segment.content} maxLines={10} />
+              {:else}
+                <p class="whitespace-pre-wrap">{segment.content}</p>
+              {/if}
+            {/if}
+          {/each}
         {/if}
       </div>
     {/if}

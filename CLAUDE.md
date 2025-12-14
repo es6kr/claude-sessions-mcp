@@ -93,6 +93,22 @@ export const GET = async () => {
 - Svelte 5 runes for reactivity
 - No emojis in code unless requested
 
+## Development Testing
+
+**MCP 서버는 실시간 코드 배포가 아님.** `start_gui` MCP 도구는 `dist/` 디렉토리의 빌드된 코드를 사용.
+
+| 환경              | 용도        | 코드 반영         |
+| ----------------- | ----------- | ----------------- |
+| `pnpm dev`        | 개발 테스트 | 실시간 Hot Reload |
+| `start_gui` (MCP) | 프로덕션    | 빌드된 코드만     |
+
+**개발 워크플로우:**
+
+1. `pnpm dev`로 개발 서버 실행 (localhost:5173)
+2. 코드 변경 → Playwright MCP로 브라우저 확인
+3. 테스트 완료 후 `pnpm build`
+4. MCP `start_gui`로 프로덕션 확인
+
 ## Release
 
 버전 업데이트 및 태그 푸시:
