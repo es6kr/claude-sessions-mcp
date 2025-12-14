@@ -4,6 +4,7 @@
   import { formatDate, getMessageContent, parseIdeTags } from '$lib/utils'
   import ExpandableContent from './ExpandableContent.svelte'
   import IdeTag from './IdeTag.svelte'
+  import TodoItem from './TodoItem.svelte'
 
   interface Props {
     msg: Message
@@ -96,9 +97,10 @@
     const content = getMessageContent(msg)
     if (content.trim().length > 0) return true
 
-    // Only warn for actual user messages without content (type 'user' or 'human')
+    // Warn for messages without content
     if (msg.type === 'user' || msg.type === 'human') {
-      console.warn('User message without content:', $state.snapshot(msg))
+      const label = isToolResult ? 'Tool result' : 'User message'
+      console.warn(`${label} without content:`, $state.snapshot(msg))
     }
     return false
   })
@@ -218,10 +220,29 @@
       {#if toolUseData.input.description}
         <p class="mt-1 text-sm text-gh-text-secondary">{toolUseData.input.description}</p>
       {/if}
-      <ExpandableContent content={String(toolUseData.input.command)} maxLines={3} />
-    {:else if toolUseData.name === 'Grep'}
-      {@const { path: _path, ...grepInput } = toolUseData.input}
-      <ExpandableContent content={JSON.stringify(grepInput, null, 2)} maxLines={6} />
+      <ExpandableContent content={String(toolUseData.input.command)} lang="sh" maxLines={3} />
+    {:else}
+      {@const { path: _path, ...input } = toolUseData.input}
+      {@const keys = Object.keys(input)}
+      {#if keys.length === 1}
+        {@const key = keys[0]}
+        {@const value = input[key]}
+        {(() => {
+          console.info(`${key} =`, value)
+          return ''
+        })()}
+        {#if key === 'todos' && Array.isArray(value)}
+          <TodoItem todos={value} />
+        {:else}
+          <ExpandableContent
+            content={`${key} = ${JSON.stringify(value, null, 2)}`}
+            lang="js"
+            maxLines={1}
+          />
+        {/if}
+      {:else}
+        <ExpandableContent content={JSON.stringify(input, null, 2)} lang="json" maxLines={6} />
+      {/if}
     {/if}
   </div>
 {:else}

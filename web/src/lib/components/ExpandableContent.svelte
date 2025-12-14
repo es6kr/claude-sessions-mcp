@@ -2,9 +2,10 @@
   interface Props {
     content: string
     maxLines?: number
+    lang?: string // syntax highlighting language (e.g., 'json', 'typescript', 'bash')
   }
 
-  let { content, maxLines = 10 }: Props = $props()
+  let { content, maxLines = 10, lang }: Props = $props()
 
   let expanded = $state(false)
   let isHovering = $state(false)
@@ -22,8 +23,15 @@
     onmouseenter={() => (isHovering = true)}
     onmouseleave={() => (isHovering = false)}
   >
-    <pre
-      class="whitespace-pre-wrap font-mono text-xs text-gh-text-secondary overflow-x-auto">{displayContent}</pre>
+    {#if lang}
+      <pre
+        class="whitespace-pre-wrap font-mono text-xs text-gh-text-secondary overflow-x-auto"><code
+          class="language-{lang}">{displayContent}</code
+        ></pre>
+    {:else}
+      <pre
+        class="whitespace-pre-wrap font-mono text-xs text-gh-text-secondary overflow-x-auto">{displayContent}</pre>
+    {/if}
     {#if !expanded}
       <div
         class="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-gh-canvas to-transparent pointer-events-none"
@@ -45,6 +53,10 @@
       </button>
     {/if}
   </div>
+{:else if lang}
+  <pre class="whitespace-pre-wrap font-mono text-xs text-gh-text-secondary overflow-x-auto"><code
+      class="language-{lang}">{content}</code
+    ></pre>
 {:else}
   <pre
     class="whitespace-pre-wrap font-mono text-xs text-gh-text-secondary overflow-x-auto">{content}</pre>
