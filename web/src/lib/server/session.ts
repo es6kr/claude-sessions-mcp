@@ -384,6 +384,10 @@ export const previewCleanup = (projectName?: string) =>
     const projects = yield* listProjects
     const targetProjects = projectName ? projects.filter((p) => p.name === projectName) : projects
 
+    // Get orphan todos count (global, not per-project)
+    const orphanTodos = yield* findOrphanTodos()
+    const orphanTodoCount = orphanTodos.length
+
     const results = yield* Effect.all(
       targetProjects.map((project) =>
         Effect.gen(function* () {
@@ -412,11 +416,20 @@ export const previewCleanup = (projectName?: string) =>
             invalidSessions,
             emptyWithTodosCount,
             orphanAgentCount: orphanAgents.length,
+            orphanTodoCount, // Include global orphan todo count in first project only
           }
         })
       ),
       { concurrency: 5 }
     )
+
+    // Add orphanTodoCount only to the first result to avoid double counting
+    if (results.length > 0) {
+      results[0] = { ...results[0], orphanTodoCount }
+      for (let i = 1; i < results.length; i++) {
+        results[i] = { ...results[i], orphanTodoCount: 0 }
+      }
+    }
 
     return results
   })
@@ -664,13 +677,14 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     } satisfies SplitSessionResult
   })
 
-// Clear sessions: 1) Remove invalid API key messages 2) Delete empty sessions 3) Delete orphan agents
+// Clear sessions: 1) Remove invalid API key messages 2) Delete empty sessions 3) Delete orphan agents 4) Delete orphan todos
 export const clearSessions = (options: {
   projectName?: string
   clearEmpty?: boolean
   clearInvalid?: boolean
   skipWithTodos?: boolean
   clearOrphanAgents?: boolean
+  clearOrphanTodos?: boolean
 }) =>
   Effect.gen(function* () {
     const {
@@ -678,6 +692,7 @@ export const clearSessions = (options: {
       clearEmpty = true,
       skipWithTodos = true,
       clearOrphanAgents = false,
+      clearOrphanTodos = false,
     } = options
     const projects = yield* listProjects
     const targetProjects = projectName ? projects.filter((p) => p.name === projectName) : projects
@@ -685,6 +700,7 @@ export const clearSessions = (options: {
     let deletedSessionCount = 0
     let removedMessageCount = 0
     let deletedOrphanAgentCount = 0
+    let deletedOrphanTodoCount = 0
     const sessionsToDelete: { project: string; sessionId: string }[] = []
 
     // Step 1: Clean invalid API key messages from all sessions
@@ -728,7 +744,7 @@ export const clearSessions = (options: {
       }
     }
 
-    // Step 3: Delete all empty sessions
+    // Step 3: Delete all empty sessions (this also deletes linked agents and todos)
     for (const { project, sessionId } of sessionsToDelete) {
       yield* deleteSession(project, sessionId)
       deletedSessionCount++
@@ -742,10 +758,17 @@ export const clearSessions = (options: {
       }
     }
 
+    // Step 5: Delete orphan todos if requested (global, not per-project)
+    if (clearOrphanTodos) {
+      const result = yield* deleteOrphanTodos()
+      deletedOrphanTodoCount = result.deletedCount
+    }
+
     return {
       success: true,
       deletedCount: deletedSessionCount,
       removedMessageCount,
       deletedOrphanAgentCount,
+      deletedOrphanTodoCount,
     }
   })

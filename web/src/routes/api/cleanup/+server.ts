@@ -16,6 +16,7 @@ export const POST: RequestHandler = async ({ request }) => {
     clearInvalid?: boolean
     skipWithTodos?: boolean
     clearOrphanAgents?: boolean
+    clearOrphanTodos?: boolean
   }
   const result = await Effect.runPromise(
     session.clearSessions({
@@ -24,6 +25,7 @@ export const POST: RequestHandler = async ({ request }) => {
       clearInvalid: body.clearInvalid,
       skipWithTodos: body.skipWithTodos,
       clearOrphanAgents: body.clearOrphanAgents,
+      clearOrphanTodos: body.clearOrphanTodos,
     })
   )
   return json(result)

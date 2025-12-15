@@ -16,12 +16,14 @@
     deletedCount: number
     removedMessageCount: number
     deletedOrphanAgentCount: number
+    deletedOrphanTodoCount: number
   } | null>(null)
 
   // Cleanup options
   let clearEmpty = $state(true)
   let skipWithTodos = $state(true)
   let clearOrphanAgents = $state(false)
+  let clearOrphanTodos = $state(false)
 
   // Computed totals
   let totalEmpty = $derived(
@@ -32,6 +34,9 @@
   )
   let totalOrphanAgents = $derived(
     cleanupPreview?.reduce((sum, p) => sum + p.orphanAgentCount, 0) ?? 0
+  )
+  let totalOrphanTodos = $derived(
+    cleanupPreview?.reduce((sum, p) => sum + p.orphanTodoCount, 0) ?? 0
   )
   let effectiveDeleteCount = $derived(skipWithTodos ? totalEmpty - totalWithTodos : totalEmpty)
 
@@ -70,7 +75,7 @@
   }
 
   const executeCleanup = async () => {
-    if (effectiveDeleteCount === 0 && !clearOrphanAgents) {
+    if (effectiveDeleteCount === 0 && !clearOrphanAgents && !clearOrphanTodos) {
       alert('Nothing to clean up')
       return
     }
@@ -82,6 +87,7 @@
         clearInvalid: false,
         skipWithTodos,
         clearOrphanAgents,
+        clearOrphanTodos,
       })
       showCleanupModal = false
       cleanupPreview = null
@@ -188,6 +194,19 @@
             <span class="text-gh-text-secondary">({totalOrphanAgents})</span>
           </span>
         </label>
+
+        <!-- Clear Orphan Todos -->
+        <label class="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            bind:checked={clearOrphanTodos}
+            class="w-4 h-4 rounded border-gh-border bg-gh-bg text-gh-green focus:ring-gh-green"
+          />
+          <span class="flex-1">
+            Delete orphan todos
+            <span class="text-gh-text-secondary">({totalOrphanTodos})</span>
+          </span>
+        </label>
       </div>
 
       <!-- Summary -->
@@ -199,11 +218,14 @@
           {/if}
         {/if}
         {#if clearOrphanAgents && totalOrphanAgents > 0}
-          {#if clearEmpty},
-          {/if}
+          {#if clearEmpty},{/if}
           {totalOrphanAgents} orphan agent{totalOrphanAgents !== 1 ? 's' : ''}
         {/if}
-        {#if !clearEmpty && !clearOrphanAgents}
+        {#if clearOrphanTodos && totalOrphanTodos > 0}
+          {#if clearEmpty || clearOrphanAgents},{/if}
+          {totalOrphanTodos} orphan todo{totalOrphanTodos !== 1 ? 's' : ''}
+        {/if}
+        {#if !clearEmpty && !clearOrphanAgents && !clearOrphanTodos}
           Nothing selected
         {/if}
       </div>
@@ -219,7 +241,8 @@
         <button
           class="px-4 py-2 text-sm rounded-md bg-gh-red text-white hover:bg-red-700 disabled:opacity-50"
           onclick={executeCleanup}
-          disabled={cleaning || (effectiveDeleteCount === 0 && !clearOrphanAgents)}
+          disabled={cleaning ||
+            (effectiveDeleteCount === 0 && !clearOrphanAgents && !clearOrphanTodos)}
         >
           {cleaning ? 'Cleaning...' : 'Execute Cleanup'}
         </button>
@@ -238,6 +261,9 @@
     {/if}
     {#if cleanupResult.deletedOrphanAgentCount > 0}
       Deleted {cleanupResult.deletedOrphanAgentCount} orphan agents.
+    {/if}
+    {#if cleanupResult.deletedOrphanTodoCount > 0}
+      Deleted {cleanupResult.deletedOrphanTodoCount} orphan todos.
     {/if}
   </div>
 {/if}
