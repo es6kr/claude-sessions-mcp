@@ -580,6 +580,82 @@ export const getSessionFiles = (projectName: string, sessionId: string) =>
     } satisfies SessionFilesSummary
   })
 
+// Move session result type
+export interface MoveSessionResult {
+  success: boolean
+  error?: string
+}
+
+// Move session to another project
+export const moveSession = (
+  sourceProject: string,
+  sessionId: string,
+  targetProject: string
+): Effect.Effect<MoveSessionResult, Error> =>
+  Effect.gen(function* () {
+    const sessionsDir = getSessionsDir()
+    const sourcePath = path.join(sessionsDir, sourceProject)
+    const targetPath = path.join(sessionsDir, targetProject)
+
+    const sourceFile = path.join(sourcePath, `${sessionId}.jsonl`)
+    const targetFile = path.join(targetPath, `${sessionId}.jsonl`)
+
+    // Check source file exists
+    const sourceExists = yield* Effect.tryPromise(() =>
+      fs
+        .access(sourceFile)
+        .then(() => true)
+        .catch(() => false)
+    )
+
+    if (!sourceExists) {
+      return { success: false, error: 'Source session not found' }
+    }
+
+    // Check target file does not exist
+    const targetExists = yield* Effect.tryPromise(() =>
+      fs
+        .access(targetFile)
+        .then(() => true)
+        .catch(() => false)
+    )
+
+    if (targetExists) {
+      return { success: false, error: 'Session already exists in target project' }
+    }
+
+    // Create target directory if needed
+    yield* Effect.tryPromise(() => fs.mkdir(targetPath, { recursive: true }))
+
+    // Find linked agents before moving
+    const linkedAgents = yield* findLinkedAgents(sourceProject, sessionId)
+
+    // Move session file
+    yield* Effect.tryPromise(() => fs.rename(sourceFile, targetFile))
+
+    // Move linked agent files
+    for (const agentId of linkedAgents) {
+      const sourceAgentFile = path.join(sourcePath, `${agentId}.jsonl`)
+      const targetAgentFile = path.join(targetPath, `${agentId}.jsonl`)
+
+      const agentExists = yield* Effect.tryPromise(() =>
+        fs
+          .access(sourceAgentFile)
+          .then(() => true)
+          .catch(() => false)
+      )
+
+      if (agentExists) {
+        yield* Effect.tryPromise(() => fs.rename(sourceAgentFile, targetAgentFile))
+      }
+    }
+
+    // Note: Todo files are not moved as they are stored globally by sessionId,
+    // not per-project. They will still work as they reference sessionId.
+
+    return { success: true }
+  })
+
 // Split session result type
 export interface SplitSessionResult {
   success: boolean

@@ -183,6 +183,14 @@ export interface SplitSessionResult {
 export const splitSession = (project: string, sessionId: string, messageUuid: string) =>
   post<SplitSessionResult>('/session/split', { project, sessionId, messageUuid })
 
+export interface MoveSessionResult {
+  success: boolean
+  error?: string
+}
+
+export const moveSession = (sourceProject: string, sessionId: string, targetProject: string) =>
+  post<MoveSessionResult>('/session/move', { sourceProject, sessionId, targetProject })
+
 export const checkFileExists = async (filePath: string): Promise<boolean> => {
   try {
     const res = await get<{ exists: boolean }>(`/file-exists?path=${encodeURIComponent(filePath)}`)

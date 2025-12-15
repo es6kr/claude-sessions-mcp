@@ -238,6 +238,51 @@
     }
   }
 
+  const handleMoveSession = async (session: SessionMeta, targetProject: string) => {
+    if (!confirm(`Move session "${session.title}" to ${targetProject.split('-').pop()}?`)) return
+
+    try {
+      loading = true
+      const result = await api.moveSession(session.projectName, session.id, targetProject)
+
+      if (result.success) {
+        // Remove from source project
+        const sourceSessions = projectSessions.get(session.projectName)
+        if (sourceSessions) {
+          projectSessions.set(
+            session.projectName,
+            sourceSessions.filter((s) => s.id !== session.id)
+          )
+        }
+
+        // Add to target project (refresh list)
+        const targetSessions = await api.listSessions(targetProject)
+        projectSessions.set(targetProject, targetSessions)
+        projectSessions = new Map(projectSessions)
+
+        // Update project counts
+        const sourceProject = projects.find((p) => p.name === session.projectName)
+        const destProject = projects.find((p) => p.name === targetProject)
+        if (sourceProject) sourceProject.sessionCount--
+        if (destProject) destProject.sessionCount++
+        projects = [...projects]
+
+        // Clear selection if moved session was selected
+        if (selectedSession?.id === session.id) {
+          selectedSession = null
+          messages = []
+          updateHash()
+        }
+      } else {
+        error = result.error ?? 'Failed to move session'
+      }
+    } catch (e) {
+      error = String(e)
+    } finally {
+      loading = false
+    }
+  }
+
   // Lifecycle
   onMount(async () => {
     await loadProjects()
@@ -259,6 +304,7 @@
     onSelectSession={selectSession}
     onRenameSession={handleRenameSession}
     onDeleteSession={handleDeleteSession}
+    onMoveSession={handleMoveSession}
   />
 
   <MessageList

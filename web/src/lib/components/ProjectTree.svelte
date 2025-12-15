@@ -12,6 +12,7 @@
     onSelectSession: (session: SessionMeta) => void
     onRenameSession: (e: Event, session: SessionMeta) => void
     onDeleteSession: (e: Event, session: SessionMeta) => void
+    onMoveSession?: (session: SessionMeta, targetProject: string) => void
   }
 
   let {
@@ -24,10 +25,49 @@
     onSelectSession,
     onRenameSession,
     onDeleteSession,
+    onMoveSession,
   }: Props = $props()
 
   // Filter out empty projects
   const nonEmptyProjects = $derived(projects.filter((p) => p.sessionCount > 0))
+
+  // Drag and drop state
+  let draggedSession = $state<SessionMeta | null>(null)
+  let dropTargetProject = $state<string | null>(null)
+
+  const handleDragStart = (e: DragEvent, session: SessionMeta) => {
+    if (!e.dataTransfer) return
+    draggedSession = session
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData(
+      'text/plain',
+      JSON.stringify({ id: session.id, project: session.projectName })
+    )
+  }
+
+  const handleDragEnd = () => {
+    draggedSession = null
+    dropTargetProject = null
+  }
+
+  const handleDragOver = (e: DragEvent, projectName: string) => {
+    if (!draggedSession || draggedSession.projectName === projectName) return
+    e.preventDefault()
+    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
+    dropTargetProject = projectName
+  }
+
+  const handleDragLeave = () => {
+    dropTargetProject = null
+  }
+
+  const handleDrop = (e: DragEvent, targetProject: string) => {
+    e.preventDefault()
+    dropTargetProject = null
+    if (!draggedSession || draggedSession.projectName === targetProject) return
+    onMoveSession?.(draggedSession, targetProject)
+    draggedSession = null
+  }
 </script>
 
 <aside class="bg-gh-bg-secondary border border-gh-border rounded-lg overflow-hidden flex flex-col">
@@ -37,6 +77,7 @@
 
   <ul class="overflow-y-auto flex-1">
     {#each nonEmptyProjects as project}
+      {@const isDropTarget = dropTargetProject === project.name}
       <li class="border-b border-gh-border-subtle">
         <!-- Project Header -->
         <button
@@ -44,8 +85,11 @@
             project.name
           )
             ? 'bg-gh-accent/10'
-            : ''}"
+            : ''} {isDropTarget ? 'bg-gh-green/20 ring-2 ring-gh-green ring-inset' : ''}"
           onclick={() => onToggleProject(project.name)}
+          ondragover={(e) => handleDragOver(e, project.name)}
+          ondragleave={handleDragLeave}
+          ondrop={(e) => handleDrop(e, project.name)}
         >
           <span class="text-xs w-3 text-gh-text-secondary">
             {expandedProjects.has(project.name) ? '▼' : '▶'}
@@ -69,10 +113,14 @@
             {:else}
               {#each projectSessions.get(project.name) ?? [] as session}
                 {@const isSelected = selectedSession?.id === session.id}
+                {@const isDragging = draggedSession?.id === session.id}
                 <li
                   class="flex items-center border-t border-gh-border-subtle group {isSelected
                     ? 'bg-gh-accent/20 border-l-3 border-l-gh-accent'
-                    : ''}"
+                    : ''} {isDragging ? 'opacity-50' : ''}"
+                  draggable="true"
+                  ondragstart={(e) => handleDragStart(e, session)}
+                  ondragend={handleDragEnd}
                 >
                   <button
                     class="flex-1 min-w-0 py-2 pr-2 bg-transparent border-none text-gh-text cursor-pointer text-left flex items-center gap-2 text-sm hover:bg-gh-border-subtle {isSelected
