@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Message, SessionMeta } from '$lib/api'
+  import * as api from '$lib/api'
   import { truncate } from '$lib/utils'
   import MessageItem from './MessageItem.svelte'
 
@@ -12,6 +13,16 @@
   }
 
   let { session, messages, onDeleteMessage, onEditTitle, onSplitSession }: Props = $props()
+
+  const openSessionFile = async () => {
+    if (!session) return
+    const filePath = `~/.claude/projects/${session.projectName}/${session.id}.jsonl`
+    try {
+      await api.openFile(filePath)
+    } catch (e) {
+      console.error('Failed to open file:', e)
+    }
+  }
 
   // Find index of first meaningful message (user/assistant, not metadata)
   const firstMeaningfulIndex = $derived(
@@ -44,7 +55,14 @@
         <h2 class="text-base font-semibold">
           {truncate(session.title ?? 'Untitled', 50)} ({messages.length} messages)
         </h2>
-        <p class="text-xs text-gh-text-secondary font-mono mt-1">{session.id}</p>
+        <button
+          class="text-xs text-gh-text-secondary font-mono mt-1 hover:text-gh-accent
+                 hover:underline cursor-pointer bg-transparent border-none p-0 text-left"
+          onclick={openSessionFile}
+          title="Open session file in VSCode"
+        >
+          {session.id}
+        </button>
       {:else}
         <h2 class="text-base font-semibold">Messages</h2>
       {/if}
