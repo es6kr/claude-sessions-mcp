@@ -169,6 +169,10 @@ export const listSessions = (projectName: string) =>
           const userAssistantMessages = messages.filter(
             (m) => m.type === 'user' || m.type === 'assistant'
           )
+
+          // Check if session has summary (for preserved sessions without user/assistant messages)
+          const hasSummary = messages.some((m) => m.type === 'summary')
+
           const firstMessage = userAssistantMessages[0]
           const lastMessage = userAssistantMessages[userAssistantMessages.length - 1]
 
@@ -180,14 +184,16 @@ export const listSessions = (projectName: string) =>
               const text = extractTextContent(m.message)
               return extractTitle(text)
             }),
-            O.getOrElse(() => `Session ${sessionId.slice(0, 8)}`)
+            O.getOrElse(() => (hasSummary ? '[Summary Only]' : `Session ${sessionId.slice(0, 8)}`))
           )
 
           return {
             id: sessionId,
             projectName,
             title,
-            messageCount: userAssistantMessages.length,
+            // If session has summary but no user/assistant messages, count as 1
+            messageCount:
+              userAssistantMessages.length > 0 ? userAssistantMessages.length : hasSummary ? 1 : 0,
             createdAt: firstMessage?.timestamp,
             updatedAt: lastMessage?.timestamp,
           } satisfies SessionMeta
@@ -463,7 +469,10 @@ const cleanInvalidMessages = (projectName: string, sessionId: string) =>
       const userAssistantCount = messages.filter(
         (m) => m.type === 'user' || m.type === 'assistant'
       ).length
-      return { removedCount: 0, remainingCount: userAssistantCount }
+      const hasSummary = messages.some((m) => m.type === 'summary')
+      // Count summary-only sessions as having 1 message
+      const remainingCount = userAssistantCount > 0 ? userAssistantCount : hasSummary ? 1 : 0
+      return { removedCount: 0, remainingCount }
     }
 
     // Remove invalid messages and fix parentUuid chain
@@ -492,7 +501,10 @@ const cleanInvalidMessages = (projectName: string, sessionId: string) =>
     const remainingUserAssistant = filtered.filter(
       (m) => m.type === 'user' || m.type === 'assistant'
     ).length
-    return { removedCount: invalidIndices.length, remainingCount: remainingUserAssistant }
+    const hasSummary = filtered.some((m) => m.type === 'summary')
+    // Count summary-only sessions as having 1 message
+    const remainingCount = remainingUserAssistant > 0 ? remainingUserAssistant : hasSummary ? 1 : 0
+    return { removedCount: invalidIndices.length, remainingCount }
   })
 
 // File change tracking types
