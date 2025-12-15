@@ -1,7 +1,20 @@
 import { Effect, pipe, Array as A, Option as O } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import * as os from 'node:os'
+import * as shared from '../../../../src/lib/shared/index.js'
+
+// Re-export shared utilities
+export const {
+  getSessionsDir,
+  findLinkedAgents,
+  findOrphanAgents,
+  deleteOrphanAgents,
+  findLinkedTodos,
+  sessionHasTodos,
+  deleteLinkedTodos,
+  findOrphanTodos,
+  deleteOrphanTodos,
+} = shared
 
 // Types
 interface ContentItem {
@@ -40,9 +53,6 @@ export interface Project {
   path: string
   sessionCount: number
 }
-
-// Get Claude sessions directory
-export const getSessionsDir = (): string => path.join(os.homedir(), '.claude', 'projects')
 
 // Extract text content from message
 const extractTextContent = (message: MessagePayload | undefined): string => {
@@ -203,28 +213,58 @@ export const readSession = (projectName: string, sessionId: string) =>
     return lines.map((line) => JSON.parse(line) as Message)
   })
 
-// Delete a session
+// Delete a session and its linked agent/todo files
 export const deleteSession = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
     const sessionsDir = getSessionsDir()
-    const filePath = path.join(sessionsDir, projectName, `${sessionId}.jsonl`)
+    const projectPath = path.join(sessionsDir, projectName)
+    const filePath = path.join(projectPath, `${sessionId}.jsonl`)
+
+    // Find linked agents first (before any deletion)
+    const linkedAgents = yield* findLinkedAgents(projectName, sessionId)
 
     // Check file size - if empty (0 bytes), just delete without backup
     const stat = yield* Effect.tryPromise(() => fs.stat(filePath))
     if (stat.size === 0) {
       yield* Effect.tryPromise(() => fs.unlink(filePath))
-      return { success: true }
+      // Still delete linked agents and todos for empty sessions
+      const agentBackupDir = path.join(projectPath, '.bak')
+      yield* Effect.tryPromise(() => fs.mkdir(agentBackupDir, { recursive: true }))
+      for (const agentId of linkedAgents) {
+        const agentPath = path.join(projectPath, `${agentId}.jsonl`)
+        const agentBackupPath = path.join(agentBackupDir, `${agentId}.jsonl`)
+        yield* Effect.tryPromise(() => fs.rename(agentPath, agentBackupPath).catch(() => {}))
+      }
+      yield* deleteLinkedTodos(sessionId, linkedAgents)
+      return { success: true, deletedAgents: linkedAgents.length }
     }
 
     // Create backup directory
     const backupDir = path.join(sessionsDir, '.bak')
     yield* Effect.tryPromise(() => fs.mkdir(backupDir, { recursive: true }))
 
-    // Move to backup (format: project_name_session_id.jsonl)
+    // Delete linked agent files (move to .bak in project folder)
+    const agentBackupDir = path.join(projectPath, '.bak')
+    yield* Effect.tryPromise(() => fs.mkdir(agentBackupDir, { recursive: true }))
+    for (const agentId of linkedAgents) {
+      const agentPath = path.join(projectPath, `${agentId}.jsonl`)
+      const agentBackupPath = path.join(agentBackupDir, `${agentId}.jsonl`)
+      yield* Effect.tryPromise(() => fs.rename(agentPath, agentBackupPath).catch(() => {}))
+    }
+
+    // Delete linked todo files
+    const todosResult = yield* deleteLinkedTodos(sessionId, linkedAgents)
+
+    // Move session to backup (format: project_name_session_id.jsonl)
     const backupPath = path.join(backupDir, `${projectName}_${sessionId}.jsonl`)
     yield* Effect.tryPromise(() => fs.rename(filePath, backupPath))
 
-    return { success: true, backupPath }
+    return {
+      success: true,
+      backupPath,
+      deletedAgents: linkedAgents.length,
+      deletedTodos: todosResult.deletedCount,
+    }
   })
 
 // Rename session by adding title prefix

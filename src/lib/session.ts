@@ -1,11 +1,17 @@
 import { Effect, pipe, Array as A, Option as O } from 'effect'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
-import * as os from 'node:os'
 import type { Message, SessionMeta, Project } from './schema.js'
+import {
+  getSessionsDir,
+  findLinkedAgents,
+  findOrphanAgents,
+  deleteOrphanAgents,
+  deleteLinkedTodos,
+} from './shared/index.js'
 
-// Get Claude sessions directory
-export const getSessionsDir = (): string => path.join(os.homedir(), '.claude', 'projects')
+// Re-export shared utilities
+export { getSessionsDir, findLinkedAgents, findOrphanAgents, deleteOrphanAgents }
 
 // List all project directories
 export const listProjects = Effect.gen(function* () {
@@ -102,35 +108,6 @@ export const readSession = (projectName: string, sessionId: string) =>
     return lines.map((line) => JSON.parse(line) as Message)
   })
 
-// Find agent files linked to a session
-export const findLinkedAgents = (projectName: string, sessionId: string) =>
-  Effect.gen(function* () {
-    const projectPath = path.join(getSessionsDir(), projectName)
-    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-    const agentFiles = files.filter((f) => f.startsWith('agent-') && f.endsWith('.jsonl'))
-
-    const linkedAgents: string[] = []
-
-    for (const agentFile of agentFiles) {
-      const filePath = path.join(projectPath, agentFile)
-      const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-      const firstLine = content.split('\n')[0]
-
-      if (firstLine) {
-        try {
-          const parsed = JSON.parse(firstLine) as { sessionId?: string }
-          if (parsed.sessionId === sessionId) {
-            linkedAgents.push(agentFile.replace('.jsonl', ''))
-          }
-        } catch {
-          // Skip invalid JSON
-        }
-      }
-    }
-
-    return linkedAgents
-  })
-
 // Delete a session and its linked agent files
 export const deleteSession = (projectName: string, sessionId: string) =>
   Effect.gen(function* () {
@@ -153,11 +130,14 @@ export const deleteSession = (projectName: string, sessionId: string) =>
       deletedAgents.push(agentId)
     }
 
+    // Delete linked todo files
+    const todosResult = yield* deleteLinkedTodos(sessionId, linkedAgents)
+
     // Move session file to backup
     const backupPath = path.join(backupDir, `${sessionId}.jsonl`)
     yield* Effect.tryPromise(() => fs.rename(filePath, backupPath))
 
-    return { success: true, backupPath, deletedAgents }
+    return { success: true, backupPath, deletedAgents, deletedTodos: todosResult.deletedCount }
   })
 
 // Rename session by adding title prefix
@@ -251,66 +231,6 @@ export const previewCleanup = (projectName?: string) =>
     )
 
     return results
-  })
-
-// Find orphan agent files (agents whose parent session no longer exists)
-export const findOrphanAgents = (projectName: string) =>
-  Effect.gen(function* () {
-    const projectPath = path.join(getSessionsDir(), projectName)
-    const files = yield* Effect.tryPromise(() => fs.readdir(projectPath))
-
-    const sessionIds = new Set(
-      files
-        .filter((f) => !f.startsWith('agent-') && f.endsWith('.jsonl'))
-        .map((f) => f.replace('.jsonl', ''))
-    )
-
-    const agentFiles = files.filter((f) => f.startsWith('agent-') && f.endsWith('.jsonl'))
-    const orphanAgents: Array<{ agentId: string; sessionId: string }> = []
-
-    for (const agentFile of agentFiles) {
-      const filePath = path.join(projectPath, agentFile)
-      const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-      const firstLine = content.split('\n')[0]
-
-      if (firstLine) {
-        try {
-          const parsed = JSON.parse(firstLine) as { sessionId?: string }
-          if (parsed.sessionId && !sessionIds.has(parsed.sessionId)) {
-            orphanAgents.push({
-              agentId: agentFile.replace('.jsonl', ''),
-              sessionId: parsed.sessionId,
-            })
-          }
-        } catch {
-          // Skip invalid JSON
-        }
-      }
-    }
-
-    return orphanAgents
-  })
-
-// Delete orphan agent files
-export const deleteOrphanAgents = (projectName: string) =>
-  Effect.gen(function* () {
-    const projectPath = path.join(getSessionsDir(), projectName)
-    const orphans = yield* findOrphanAgents(projectName)
-
-    // Create backup directory
-    const backupDir = path.join(projectPath, '.bak')
-    yield* Effect.tryPromise(() => fs.mkdir(backupDir, { recursive: true }))
-
-    const deletedAgents: string[] = []
-
-    for (const orphan of orphans) {
-      const agentPath = path.join(projectPath, `${orphan.agentId}.jsonl`)
-      const agentBackupPath = path.join(backupDir, `${orphan.agentId}.jsonl`)
-      yield* Effect.tryPromise(() => fs.rename(agentPath, agentBackupPath))
-      deletedAgents.push(orphan.agentId)
-    }
-
-    return { success: true, deletedAgents, count: deletedAgents.length }
   })
 
 // Clear sessions (empty and invalid)
