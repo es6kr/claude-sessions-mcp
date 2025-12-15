@@ -14,12 +14,16 @@ export const POST: RequestHandler = async ({ request }) => {
     project?: string
     clearEmpty?: boolean
     clearInvalid?: boolean
+    skipWithTodos?: boolean
+    clearOrphanAgents?: boolean
   }
   const result = await Effect.runPromise(
     session.clearSessions({
       projectName: body.project,
       clearEmpty: body.clearEmpty,
       clearInvalid: body.clearInvalid,
+      skipWithTodos: body.skipWithTodos,
+      clearOrphanAgents: body.clearOrphanAgents,
     })
   )
   return json(result)

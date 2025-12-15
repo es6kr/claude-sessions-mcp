@@ -54,6 +54,8 @@ export interface CleanupPreview {
   project: string
   emptySessions: SessionMeta[]
   invalidSessions: SessionMeta[]
+  emptyWithTodosCount: number
+  orphanAgentCount: number
 }
 
 // Fetch helpers
@@ -129,7 +131,15 @@ export const clearSessions = (options: {
   project?: string
   clearEmpty?: boolean
   clearInvalid?: boolean
-}) => post<{ success: boolean; deletedCount: number }>('/cleanup', options)
+  skipWithTodos?: boolean
+  clearOrphanAgents?: boolean
+}) =>
+  post<{
+    success: boolean
+    deletedCount: number
+    removedMessageCount: number
+    deletedOrphanAgentCount: number
+  }>('/cleanup', options)
 
 export const getVersion = () => get<{ version: string }>('/version')
 

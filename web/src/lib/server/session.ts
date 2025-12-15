@@ -378,7 +378,7 @@ export const deleteMessage = (projectName: string, sessionId: string, messageUui
     return { success: true }
   })
 
-// Preview cleanup - find empty and invalid sessions
+// Preview cleanup - find empty and invalid sessions with additional stats
 export const previewCleanup = (projectName?: string) =>
   Effect.gen(function* () {
     const projects = yield* listProjects
@@ -393,10 +393,25 @@ export const previewCleanup = (projectName?: string) =>
             (s) => s.title?.includes('Invalid API key') || s.title?.includes('API key')
           )
 
+          // Count empty sessions that have todos
+          let emptyWithTodosCount = 0
+          for (const session of emptySessions) {
+            const linkedAgents = yield* findLinkedAgents(project.name, session.id)
+            const hasTodos = yield* sessionHasTodos(session.id, linkedAgents)
+            if (hasTodos) {
+              emptyWithTodosCount++
+            }
+          }
+
+          // Count orphan agents
+          const orphanAgents = yield* findOrphanAgents(project.name)
+
           return {
             project: project.name,
             emptySessions,
             invalidSessions,
+            emptyWithTodosCount,
+            orphanAgentCount: orphanAgents.length,
           }
         })
       ),
@@ -649,19 +664,27 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     } satisfies SplitSessionResult
   })
 
-// Clear sessions: 1) Remove invalid API key messages 2) Delete empty sessions
+// Clear sessions: 1) Remove invalid API key messages 2) Delete empty sessions 3) Delete orphan agents
 export const clearSessions = (options: {
   projectName?: string
   clearEmpty?: boolean
   clearInvalid?: boolean
+  skipWithTodos?: boolean
+  clearOrphanAgents?: boolean
 }) =>
   Effect.gen(function* () {
-    const { projectName, clearEmpty = true } = options
+    const {
+      projectName,
+      clearEmpty = true,
+      skipWithTodos = true,
+      clearOrphanAgents = false,
+    } = options
     const projects = yield* listProjects
     const targetProjects = projectName ? projects.filter((p) => p.name === projectName) : projects
 
     let deletedSessionCount = 0
     let removedMessageCount = 0
+    let deletedOrphanAgentCount = 0
     const sessionsToDelete: { project: string; sessionId: string }[] = []
 
     // Step 1: Clean invalid API key messages from all sessions
@@ -692,6 +715,12 @@ export const clearSessions = (options: {
               (s) => s.project === project.name && s.sessionId === session.id
             )
             if (!alreadyMarked) {
+              // Skip sessions with todos if skipWithTodos is true
+              if (skipWithTodos) {
+                const linkedAgents = yield* findLinkedAgents(project.name, session.id)
+                const hasTodos = yield* sessionHasTodos(session.id, linkedAgents)
+                if (hasTodos) continue
+              }
               sessionsToDelete.push({ project: project.name, sessionId: session.id })
             }
           }
@@ -705,9 +734,18 @@ export const clearSessions = (options: {
       deletedSessionCount++
     }
 
+    // Step 4: Delete orphan agents if requested
+    if (clearOrphanAgents) {
+      for (const project of targetProjects) {
+        const result = yield* deleteOrphanAgents(project.name)
+        deletedOrphanAgentCount += result.count
+      }
+    }
+
     return {
       success: true,
       deletedCount: deletedSessionCount,
       removedMessageCount,
+      deletedOrphanAgentCount,
     }
   })
