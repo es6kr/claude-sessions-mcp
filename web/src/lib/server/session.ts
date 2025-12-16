@@ -365,14 +365,17 @@ export const deleteMessage = (projectName: string, sessionId: string, messageUui
       return { success: false, error: 'Message not found' }
     }
 
-    // Get the parent UUID of deleted message
+    // Get the deleted message's uuid and parentUuid
     const deletedMsg = messages[targetIndex]
+    const deletedUuid = deletedMsg?.uuid ?? deletedMsg?.messageId
     const parentUuid = deletedMsg?.parentUuid
 
-    // Update child message to point to deleted message's parent
-    const nextMsg = messages[targetIndex + 1]
-    if (nextMsg) {
-      nextMsg.parentUuid = parentUuid
+    // Find all messages that reference the deleted message as their parent
+    // and update them to point to the deleted message's parent
+    for (const msg of messages) {
+      if (msg.parentUuid === deletedUuid) {
+        msg.parentUuid = parentUuid
+      }
     }
 
     // Remove the message
