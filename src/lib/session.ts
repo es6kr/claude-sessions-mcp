@@ -364,7 +364,20 @@ export interface SplitSessionResult {
   newSessionId?: string
   newSessionPath?: string
   movedMessageCount?: number
+  duplicatedSummary?: boolean
   error?: string
+}
+
+// Check if a message is a continuation summary (from compact)
+const isContinuationSummary = (msg: Record<string, unknown>): boolean => {
+  // isCompactSummary flag is set by Claude Code for continuation summaries
+  if (msg.isCompactSummary === true) return true
+
+  // Fallback: check message content
+  if (msg.type !== 'user') return false
+  const message = msg.message as { content?: string } | undefined
+  const content = message?.content ?? ''
+  return content.startsWith('This session is being continued from')
 }
 
 export const splitSession = (projectName: string, sessionId: string, splitAtMessageUuid: string) =>
@@ -390,9 +403,25 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
     // Generate new session ID
     const newSessionId = crypto.randomUUID()
 
-    // Split messages
-    const remainingMessages = allMessages.slice(0, splitIndex)
+    // Check if the split message is a continuation summary
+    const splitMessage = allMessages[splitIndex]
+    const shouldDuplicate = isContinuationSummary(splitMessage)
+
+    // Split messages - if continuation summary, include it in both sessions
+    let remainingMessages: Record<string, unknown>[]
     const movedMessages = allMessages.slice(splitIndex)
+
+    if (shouldDuplicate) {
+      // Create a copy of the continuation message with new UUID for the original session
+      const duplicatedMessage: Record<string, unknown> = {
+        ...splitMessage,
+        uuid: crypto.randomUUID(),
+        sessionId: sessionId, // Keep original session ID
+      }
+      remainingMessages = [...allMessages.slice(0, splitIndex), duplicatedMessage]
+    } else {
+      remainingMessages = allMessages.slice(0, splitIndex)
+    }
 
     // Update moved messages with new sessionId and fix first message's parentUuid
     const updatedMovedMessages = movedMessages.map((msg, index) => {
@@ -451,6 +480,7 @@ export const splitSession = (projectName: string, sessionId: string, splitAtMess
       newSessionId,
       newSessionPath: newFilePath,
       movedMessageCount: movedMessages.length,
+      duplicatedSummary: shouldDuplicate,
     } satisfies SplitSessionResult
   })
 
