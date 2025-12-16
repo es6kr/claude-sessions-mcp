@@ -5,15 +5,16 @@ import * as shared from '../../../../src/lib/shared/index.js'
 
 // Re-export shared utilities
 export const {
-  getSessionsDir,
-  findLinkedAgents,
-  findOrphanAgents,
-  deleteOrphanAgents,
-  findLinkedTodos,
-  sessionHasTodos,
   deleteLinkedTodos,
-  findOrphanTodos,
+  deleteMessage,
+  deleteOrphanAgents,
   deleteOrphanTodos,
+  findLinkedAgents,
+  findLinkedTodos,
+  findOrphanAgents,
+  findOrphanTodos,
+  getSessionsDir,
+  sessionHasTodos,
 } = shared
 
 // Types
@@ -342,44 +343,6 @@ export const updateCustomTitle = (
 
     // Update customTitle field
     ;(msg as Message & { customTitle?: string }).customTitle = newTitle
-
-    const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
-    yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
-
-    return { success: true }
-  })
-
-// Delete a message from session
-export const deleteMessage = (projectName: string, sessionId: string, messageUuid: string) =>
-  Effect.gen(function* () {
-    const filePath = path.join(getSessionsDir(), projectName, `${sessionId}.jsonl`)
-    const content = yield* Effect.tryPromise(() => fs.readFile(filePath, 'utf-8'))
-    const lines = content.trim().split('\n').filter(Boolean)
-    const messages = lines.map((line) => JSON.parse(line) as Record<string, unknown>)
-
-    // Find by uuid or messageId (for file-history-snapshot type)
-    const targetIndex = messages.findIndex(
-      (m) => m.uuid === messageUuid || m.messageId === messageUuid
-    )
-    if (targetIndex === -1) {
-      return { success: false, error: 'Message not found' }
-    }
-
-    // Get the deleted message's uuid and parentUuid
-    const deletedMsg = messages[targetIndex]
-    const deletedUuid = deletedMsg?.uuid ?? deletedMsg?.messageId
-    const parentUuid = deletedMsg?.parentUuid
-
-    // Find all messages that reference the deleted message as their parent
-    // and update them to point to the deleted message's parent
-    for (const msg of messages) {
-      if (msg.parentUuid === deletedUuid) {
-        msg.parentUuid = parentUuid
-      }
-    }
-
-    // Remove the message
-    messages.splice(targetIndex, 1)
 
     const newContent = messages.map((m) => JSON.stringify(m)).join('\n') + '\n'
     yield* Effect.tryPromise(() => fs.writeFile(filePath, newContent, 'utf-8'))
