@@ -1,5 +1,15 @@
 # claude-sessions-mcp
 
+> **⚠️ DEPRECATED**: This package has been replaced by [claude-code-sessions](https://github.com/es6kr/claude-code-sessions).
+>
+> Please migrate to the new package:
+> ```bash
+> npm uninstall claude-sessions-mcp
+> npm install claude-code-sessions
+> ```
+
+---
+
 MCP (Model Context Protocol) server and Web UI for managing Claude Code sessions.
 
 ## Features
